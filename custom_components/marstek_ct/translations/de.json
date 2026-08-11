@@ -4,17 +4,17 @@
     "step": {
       "user": {
         "title": "Marstek BLE",
-        "description": "Home Assistant durchsucht die aktuell bekannten connectable BLE-Geräte, einschließlich Bluetooth-Proxys. CT002 und Venus können aus der Liste gewählt werden; eine MAC-Adresse kann weiterhin manuell eingegeben werden. Der CT002 wird standardmäßig alle 5 Sekunden abgefragt.",
+        "description": "Home Assistant durchsucht die aktuell bekannten connectable BLE-Geräte, einschließlich Bluetooth-Proxys. CT002 und Venus können unabhängig voneinander ausgewählt werden; mindestens ein Gerät ist erforderlich. MAC-Adressen können weiterhin manuell eingegeben werden.",
         "data": {
-          "ct_mac": "CT002",
+          "ct_mac": "CT002 (optional)",
           "venus_devices": "Venus-Geräte",
           "ct_poll_interval": "CT002-Abfrageintervall",
           "venus_poll_interval": "Venus-Abfrageintervall"
         },
         "data_description": {
-          "ct_mac": "Erkannte CT002 erscheinen als MST-TPM_… mit Bluetooth-MAC. Falls nötig kann die MAC manuell eingegeben werden.",
-          "venus_devices": "Mehrere erkannte Venus können ausgewählt werden. Anschließend wird jedes Gerät einzeln benannt.",
-          "ct_poll_interval": "Standard und Empfehlung: 5 s. Zulässig: 1 bis 300 s.",
+          "ct_mac": "Optional. Erkannte CT002 erscheinen als MST-TPM_… mit Bluetooth-MAC. Falls nötig kann die MAC manuell eingegeben werden.",
+          "venus_devices": "Eine oder mehrere erkannte Venus können ausgewählt werden. Anschließend wird jedes Gerät einzeln benannt.",
+          "ct_poll_interval": "Wird nur verwendet, wenn ein CT002 konfiguriert ist. Standard und Empfehlung: 5 s. Zulässig: 1 bis 300 s.",
           "venus_poll_interval": "Standard: 150 s. Jeder Zyklus liest alle ausgewählten Venus nacheinander."
         }
       },
@@ -32,24 +32,27 @@
     },
     "error": {
       "invalid_mac": "Mindestens eine Bluetooth-MAC-Adresse ist ungültig.",
-      "empty_name": "Der Name darf nicht leer sein."
+      "empty_name": "Der Name darf nicht leer sein.",
+      "no_devices": "Es muss mindestens ein CT002 oder eine Venus ausgewählt werden."
     },
     "abort": {
-      "already_configured": "Dieser CT002 ist bereits konfiguriert."
+      "already_configured": "Diese Marstek-BLE-Konfiguration ist bereits vorhanden."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Marstek-BLE-Optionen",
-        "description": "Home Assistant zeigt erkannte Venus-Geräte aus dem Bluetooth-Manager einschließlich Proxys. Bereits konfigurierte Geräte bleiben auswählbar, auch wenn sie gerade nicht gesehen werden. Nach dem Speichern wird die Integration automatisch neu geladen.",
+        "description": "CT002 und Venus können unabhängig voneinander hinzugefügt oder entfernt werden. Home Assistant zeigt erkannte Geräte aus dem Bluetooth-Manager einschließlich Proxys. Bereits konfigurierte Geräte bleiben auswählbar, auch wenn sie gerade nicht gesehen werden. Nach dem Speichern wird die Integration automatisch neu geladen.",
         "data": {
+          "ct_mac": "CT002 (optional)",
           "ct_poll_interval": "CT002-Abfrageintervall",
           "venus_poll_interval": "Venus-Abfrageintervall",
           "venus_devices": "Venus-Geräte"
         },
         "data_description": {
-          "ct_poll_interval": "Standard und Empfehlung: 5 s. Zulässig: 1 bis 300 s.",
+          "ct_mac": "Optional. Auswählen, ändern oder entfernen. Ohne CT002 läuft die Integration ausschließlich mit den konfigurierten Venus-Geräten.",
+          "ct_poll_interval": "Wird nur verwendet, wenn ein CT002 konfiguriert ist. Standard und Empfehlung: 5 s. Zulässig: 1 bis 300 s.",
           "venus_poll_interval": "Standard: 150 s. Ein Poll liest alle ausgewählten Venus nacheinander.",
           "venus_devices": "Auswählen, hinzufügen oder entfernen. Danach kann jedes ausgewählte Gerät einzeln benannt werden."
         }
@@ -67,8 +70,9 @@
       }
     },
     "error": {
-      "invalid_mac": "Mindestens eine Venus-Bluetooth-MAC-Adresse ist ungültig.",
-      "empty_name": "Der Name darf nicht leer sein."
+      "invalid_mac": "Mindestens eine Bluetooth-MAC-Adresse ist ungültig.",
+      "empty_name": "Der Name darf nicht leer sein.",
+      "no_devices": "Es muss mindestens ein CT002 oder eine Venus ausgewählt werden."
     }
   },
   "entity": {
