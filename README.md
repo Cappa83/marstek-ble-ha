@@ -5,6 +5,7 @@ Read-only, local Bluetooth integration for Home Assistant.
 Current verified support:
 
 - **Marstek CT002**
+  - optional: the integration also works with Venus devices only
   - total power
   - phase A/B/C power
   - phase A/B/C voltage (diagnostic, disabled by default)
@@ -12,7 +13,7 @@ Current verified support:
   - raw device version byte (diagnostic, disabled by default)
 - **Marstek Venus E V3**
   - state of charge (SOC)
-  - state of health (SOH)
+  - state of health (SOH); a raw value of `0` is treated as unavailable because Venus E V3 units have been observed reporting `0` on otherwise healthy/new batteries
   - battery voltage and signed battery current
   - battery temperature
   - minimum, maximum and delta cell voltage
@@ -22,9 +23,7 @@ Current verified support:
   - 16 individual cell voltages (diagnostic, disabled by default)
   - BLE RSSI (diagnostic, disabled by default)
 
-All Venus BMS values above come from the same read-only `0x14` response that is
-already used for SOC. Enabling the additional sensors does **not** add BLE
-requests or increase the Venus polling frequency.
+All Venus BMS values above come from the same read-only `0x14` response that is already used for SOC. Enabling the additional sensors does **not** add BLE requests or increase the Venus polling frequency.
 
 The integration uses Home Assistant's native Bluetooth stack, so compatible Home Assistant Bluetooth proxies can be used transparently.
 
@@ -39,6 +38,7 @@ Only protocol fields that were verified against live devices and the community-d
 - CT002 default and recommended interval: **5 seconds**
 - CT002 configurable range: **1 to 300 seconds**
 - intervals below **5 seconds** require explicit confirmation and also generate a warning in the Home Assistant log
+- CT002 polling settings are ignored when no CT002 is configured
 - Venus default: **150 seconds**
 - Venus configurable range: **30 to 3600 seconds**
 - one connection attempt per polling cycle; no immediate retry loop
@@ -52,27 +52,26 @@ The CT002 has shown sensitivity to aggressive BLE traffic in real-world use. Fas
 
 Add **Marstek BLE** from Home Assistant's integrations UI.
 
-The config flow requests a fresh Home Assistant Bluetooth scan and offers detected
-Marstek devices from all registered scanners, including Bluetooth proxies:
+The config flow requests a fresh Home Assistant Bluetooth scan and offers detected Marstek devices from all registered scanners, including Bluetooth proxies:
 
 - CT002 advertisements named `MST-TPM_…`
 - Venus E V3 advertisements named `MST_VNSE3_…`
 
-Select the CT002 and any Venus devices from the discovered list. Each selected
-Venus is then named individually. Manual Bluetooth MAC entry remains available
-as a fallback.
+CT002 and Venus devices are independent. A valid configuration contains at least one of them:
 
-Polling intervals and the Venus device selection can be changed later under
-**Configure**. Already configured Venus devices remain selectable even if they
-are temporarily not visible during a scan. Saving the options reloads the
-integration automatically.
+- CT002 only
+- one or more Venus devices only
+- CT002 plus one or more Venus devices
 
-Internally the existing `Name=Bluetooth-MAC` representation is retained, so
-existing installations do not need a configuration migration for the new UI.
+Each selected Venus is named individually. Manual Bluetooth MAC entry remains available as a fallback.
+
+Polling intervals and both the CT002 and Venus device selection can be changed later under **Configure**. Already configured devices remain selectable even if they are temporarily not visible during a scan. Saving the options reloads the integration automatically.
+
+Internally the existing `Name=Bluetooth-MAC` Venus representation is retained. Existing v3 entries migrate to config-entry version 4 without changing the historic CT entity/device identities.
 
 ## Existing `marstek_ct` installations
 
-The Home Assistant domain remains `marstek_ct` intentionally. Migration keeps the existing CT total-power entity identity intact, removes obsolete UDP-era entities, converts the config-entry unique ID to the CT002 MAC, and drops UDP-only config fields that are no longer used. The legacy battery MAC is retained only where an existing CT entity/device identity still depends on it.
+The Home Assistant domain remains `marstek_ct` intentionally. Migration keeps the existing CT total-power entity identity intact, removes obsolete UDP-era entities, preserves legacy identifiers that are still required for entity continuity, and moves the configurable CT002 selection into options so it can be added or removed without making CT002 mandatory.
 
 The old UDP runtime code is not part of this repository.
 
@@ -81,6 +80,20 @@ The old UDP runtime code is not part of this repository.
 Until this repository is added to the default HACS store, add it as a custom integration repository and install **Marstek BLE**.
 
 Repository: `Cappa83/marstek-ble-ha`
+
+GitHub pre-releases can be installed through HACS when pre-releases are enabled for this repository.
+
+## Versioning and releases
+
+The project uses semantic-style versions:
+
+- patch release, for example `0.3.1`: compatible bug fix
+- minor release, for example `0.4.0`: compatible feature addition
+- beta/RC, for example `0.3.0b1` or `0.3.0rc1`: test release before the corresponding stable version
+
+`main` is the development branch. HACS distribution is done through immutable GitHub Releases/tags, not through release branches.
+
+Publishing is handled by the **Publish release** GitHub Action. It accepts the version from `manifest.json`, compiles the integration, validates JSON, runs the regression tests, and only then creates `v<version>`. Versions containing `a`, `b`, or `rc` are published as GitHub pre-releases.
 
 ## License
 
