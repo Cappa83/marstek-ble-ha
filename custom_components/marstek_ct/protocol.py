@@ -90,8 +90,11 @@ def parse_venus_bms(raw: bytes) -> dict[str, Any]:
     if not 0 <= soc <= 100:
         raise ValueError(f"Invalid SOC value: {soc}")
 
+    # Venus E V3 units have been observed returning 0 for SOH even on new,
+    # otherwise healthy batteries. Treat 0 as an unavailable/sentinel value;
+    # real percentage values remain 1..100.
     soh_raw = int.from_bytes(payload[10:12], "little", signed=False)
-    soh: int | None = soh_raw if 0 <= soh_raw <= 100 else None
+    soh: int | None = soh_raw if 1 <= soh_raw <= 100 else None
 
     result: dict[str, Any] = {
         "soc": soc,
