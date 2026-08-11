@@ -24,15 +24,16 @@ Only protocol fields that were verified against live devices are exposed. Unknow
 
 ### Polling
 
-- CT002 default: **5 seconds**
-- CT002 minimum: **5 seconds**
+- CT002 default and recommended interval: **5 seconds**
+- CT002 configurable range: **1 to 300 seconds**
+- intervals below **5 seconds** require explicit confirmation and also generate a warning in the Home Assistant log
 - Venus default: **150 seconds**
-- Venus minimum: **30 seconds**
+- Venus configurable range: **30 to 3600 seconds**
 - one connection attempt per polling cycle; no immediate retry loop
 - CT002 uses one persistent BLE connection while available
 - Venus devices are queried sequentially and disconnected after each read
 
-The CT002 has shown sensitivity to aggressive BLE traffic in real-world use. The integration therefore refuses CT polling intervals below 5 seconds.
+The CT002 has shown sensitivity to aggressive BLE traffic in real-world use. Faster polling is therefore available for users who want to test it, but individual devices may become less stable below the recommended 5-second interval.
 
 ## Configuration
 
@@ -55,7 +56,7 @@ Polling intervals and the Venus device list can be changed later under **Configu
 
 ## Existing `marstek_ct` installations
 
-The Home Assistant domain remains `marstek_ct` intentionally. Version 0.1.0 includes a migration path for older config entries that still contain the former UDP integration's `host`, `battery_mac`, `device_type`, or `ct_type` fields. Legacy identity fields are retained where needed so existing CT entity registry entries can keep their unique IDs.
+The Home Assistant domain remains `marstek_ct` intentionally. Migration keeps the existing CT total-power entity identity intact, removes obsolete UDP-era entities, converts the config-entry unique ID to the CT002 MAC, and drops UDP-only config fields that are no longer used. The legacy battery MAC is retained only where an existing CT entity/device identity still depends on it.
 
 The old UDP runtime code is not part of this repository.
 
