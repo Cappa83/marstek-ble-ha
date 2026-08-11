@@ -65,8 +65,20 @@ _VENUS_INTERVAL = selector.NumberSelector(
 
 
 def _fast_poll_requested(data: dict[str, Any]) -> bool:
-    """Return whether CT polling is below the recommended interval."""
-    return int(data[CONF_CT_POLL_INTERVAL]) < RECOMMENDED_MIN_CT_POLL_INTERVAL
+    """Return whether a configured CT002 uses sub-recommended polling."""
+    return bool(data.get(CONF_CT_MAC)) and int(
+        data[CONF_CT_POLL_INTERVAL]
+    ) < RECOMMENDED_MIN_CT_POLL_INTERVAL
+
+
+def _normalize_optional_mac(value: Any) -> str | None:
+    """Normalize an optional Bluetooth address."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return normalize_mac(text)
 
 
 def _normalize_selected(values: list[str] | tuple[str, ...]) -> list[str]:
@@ -80,6 +92,13 @@ def _normalize_selected(values: list[str] | tuple[str, ...]) -> list[str]:
         seen.add(address)
         result.append(address)
     return result
+
+
+def _configured_ct_mac(entry: ConfigEntry) -> str | None:
+    """Return the configured CT002 address, including legacy entries."""
+    if CONF_CT_MAC in entry.options:
+        return _normalize_optional_mac(entry.options.get(CONF_CT_MAC))
+    return _normalize_optional_mac(entry.data.get(CONF_CT_MAC))
 
 
 def _discovered_marstek_devices(
@@ -108,9 +127,7 @@ def _discovered_marstek_devices(
     return ct_devices, venus_devices
 
 
-def _select_options(
-    devices: dict[str, str],
-) -> list[dict[str, str]]:
+def _select_options(devices: dict[str, str]) -> list[dict[str, str]]:
     """Build selector options sorted by advertised/device name."""
     return [
         {"value": address, "label": f"{name} ({address})"}
@@ -147,7 +164,7 @@ async def _refresh_bluetooth_scan(hass: HomeAssistant) -> None:
 class MarstekConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle Marstek BLE setup."""
 
-    VERSION = 3
+    VERSION = 4
 
     @staticmethod
     @callback
@@ -159,13 +176,29 @@ class MarstekConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any]
     ) -> ConfigFlowResult:
         """Create a validated Marstek BLE config entry."""
-        ct_mac = str(user_input[CONF_CT_MAC])
-        await self.async_set_unique_id(ct_mac.replace(":", "").lower())
+        ct_mac = _normalize_optional_mac(user_input.get(CONF_CT_MAC))
+        venus_devices = parse_venus_devices(str(user_input[CONF_VENUS_DEVICES]))
+
+        if ct_mac is not None:
+            unique_id = ct_mac.replace(":", "").lower()
+            title = f"Marstek BLE CT002 {ct_mac[-5:].replace(':', '')}"
+        else:
+            first_venus = venus_devices[0]
+            venus_key = first_venus.address.replace(":", "").lower()
+            unique_id = f"venus_{venus_key}"
+            if len(venus_devices) == 1:
+                title = f"Marstek BLE Venus {venus_key[-4:]}"
+            else:
+                title = f"Marstek BLE {len(venus_devices)} Venus"
+
+        await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured()
+
         return self.async_create_entry(
-            title=f"Marstek BLE CT002 {ct_mac[-5:].replace(':', '')}",
-            data={CONF_CT_MAC: ct_mac},
+            title=title,
+            data={},
             options={
+                CONF_CT_MAC: ct_mac or "",
                 CONF_CT_POLL_INTERVAL: int(user_input[CONF_CT_POLL_INTERVAL]),
                 CONF_VENUS_POLL_INTERVAL: int(user_input[CONF_VENUS_POLL_INTERVAL]),
                 CONF_VENUS_DEVICES: str(user_input[CONF_VENUS_DEVICES]),
@@ -194,27 +227,32 @@ class MarstekConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                ct_mac = normalize_mac(str(user_input[CONF_CT_MAC]))
+                ct_mac = _normalize_optional_mac(user_input.get(CONF_CT_MAC))
                 venus_addresses = _normalize_selected(
                     list(user_input.get(CONF_VENUS_DEVICES, []))
                 )
             except ValueError:
                 errors["base"] = "invalid_mac"
             else:
-                self._pending_user_base = {
-                    CONF_CT_MAC: ct_mac,
-                    CONF_CT_POLL_INTERVAL: int(user_input[CONF_CT_POLL_INTERVAL]),
-                    CONF_VENUS_POLL_INTERVAL: int(
-                        user_input[CONF_VENUS_POLL_INTERVAL]
-                    ),
-                }
-                self._pending_venus_addresses = venus_addresses
-                self._pending_venus_names: dict[str, str] = {}
-                self._venus_name_index = 0
+                if ct_mac is None and not venus_addresses:
+                    errors["base"] = "no_devices"
+                else:
+                    self._pending_user_base = {
+                        CONF_CT_MAC: ct_mac or "",
+                        CONF_CT_POLL_INTERVAL: int(
+                            user_input[CONF_CT_POLL_INTERVAL]
+                        ),
+                        CONF_VENUS_POLL_INTERVAL: int(
+                            user_input[CONF_VENUS_POLL_INTERVAL]
+                        ),
+                    }
+                    self._pending_venus_addresses = venus_addresses
+                    self._pending_venus_names: dict[str, str] = {}
+                    self._venus_name_index = 0
 
-                if venus_addresses:
-                    return await self.async_step_venus_name()
-                return await self._async_finish_user_devices()
+                    if venus_addresses:
+                        return await self.async_step_venus_name()
+                    return await self._async_finish_user_devices()
 
         if not getattr(self, "_scan_done", False):
             await _refresh_bluetooth_scan(self.hass)
@@ -223,7 +261,7 @@ class MarstekConfigFlow(ConfigFlow, domain=DOMAIN):
         ct_devices, venus_devices = _discovered_marstek_devices(self.hass)
         schema = vol.Schema(
             {
-                vol.Required(CONF_CT_MAC): _device_selector(
+                vol.Optional(CONF_CT_MAC): _device_selector(
                     _select_options(ct_devices), multiple=False
                 ),
                 vol.Optional(CONF_VENUS_DEVICES, default=[]): _device_selector(
@@ -297,7 +335,7 @@ class MarstekConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class MarstekOptionsFlow(OptionsFlowWithReload):
-    """Manage Marstek BLE polling and Venus devices."""
+    """Manage Marstek BLE devices and polling."""
 
     async def _async_finish_options_devices(self) -> ConfigFlowResult:
         """Finish Venus naming and save/confirm the options."""
@@ -316,8 +354,9 @@ class MarstekOptionsFlow(OptionsFlowWithReload):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Select Venus devices and configure polling."""
+        """Select CT002/Venus devices and configure polling."""
         errors: dict[str, str] = {}
+        current_ct = _configured_ct_mac(self.config_entry)
         current_devices = parse_venus_devices(
             self.config_entry.options.get(
                 CONF_VENUS_DEVICES,
@@ -328,40 +367,63 @@ class MarstekOptionsFlow(OptionsFlowWithReload):
 
         if user_input is not None:
             try:
+                ct_mac = _normalize_optional_mac(user_input.get(CONF_CT_MAC))
                 venus_addresses = _normalize_selected(
                     list(user_input.get(CONF_VENUS_DEVICES, []))
                 )
             except ValueError:
-                errors[CONF_VENUS_DEVICES] = "invalid_mac"
+                errors["base"] = "invalid_mac"
             else:
-                self._pending_options_base = {
-                    CONF_CT_POLL_INTERVAL: int(user_input[CONF_CT_POLL_INTERVAL]),
-                    CONF_VENUS_POLL_INTERVAL: int(
-                        user_input[CONF_VENUS_POLL_INTERVAL]
-                    ),
-                }
-                self._pending_venus_addresses = venus_addresses
-                self._pending_venus_names = {
-                    address: current_names[address]
-                    for address in venus_addresses
-                    if address in current_names
-                }
-                self._venus_name_index = 0
+                if ct_mac is None and not venus_addresses:
+                    errors["base"] = "no_devices"
+                else:
+                    self._pending_options_base = {
+                        CONF_CT_MAC: ct_mac or "",
+                        CONF_CT_POLL_INTERVAL: int(
+                            user_input[CONF_CT_POLL_INTERVAL]
+                        ),
+                        CONF_VENUS_POLL_INTERVAL: int(
+                            user_input[CONF_VENUS_POLL_INTERVAL]
+                        ),
+                    }
+                    self._pending_venus_addresses = venus_addresses
+                    self._pending_venus_names = {
+                        address: current_names[address]
+                        for address in venus_addresses
+                        if address in current_names
+                    }
+                    self._venus_name_index = 0
 
-                if venus_addresses:
-                    return await self.async_step_venus_name()
-                return await self._async_finish_options_devices()
+                    if venus_addresses:
+                        return await self.async_step_venus_name()
+                    return await self._async_finish_options_devices()
 
         if not getattr(self, "_scan_done", False):
             await _refresh_bluetooth_scan(self.hass)
             self._scan_done = True
 
-        _, discovered_venus = _discovered_marstek_devices(self.hass)
+        discovered_ct, discovered_venus = _discovered_marstek_devices(self.hass)
+        if current_ct is not None:
+            discovered_ct.setdefault(current_ct, f"CT002 {current_ct[-5:]}")
         for device in current_devices:
             discovered_venus.setdefault(device.address, device.name)
 
+        if current_ct is not None:
+            ct_field = vol.Optional(CONF_CT_MAC, default=current_ct)
+        else:
+            ct_field = vol.Optional(CONF_CT_MAC)
+
         schema = vol.Schema(
             {
+                ct_field: _device_selector(
+                    _select_options(discovered_ct), multiple=False
+                ),
+                vol.Optional(
+                    CONF_VENUS_DEVICES,
+                    default=[device.address for device in current_devices],
+                ): _device_selector(
+                    _select_options(discovered_venus), multiple=True
+                ),
                 vol.Required(
                     CONF_CT_POLL_INTERVAL,
                     default=self.config_entry.options.get(
@@ -374,12 +436,6 @@ class MarstekOptionsFlow(OptionsFlowWithReload):
                         CONF_VENUS_POLL_INTERVAL, DEFAULT_VENUS_POLL_INTERVAL
                     ),
                 ): _VENUS_INTERVAL,
-                vol.Optional(
-                    CONF_VENUS_DEVICES,
-                    default=[device.address for device in current_devices],
-                ): _device_selector(
-                    _select_options(discovered_venus), multiple=True
-                ),
             }
         )
 
