@@ -6,6 +6,7 @@ from datetime import timedelta
 import logging
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -20,7 +21,11 @@ class MarstekCtCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Poll the CT002 while tolerating short BLE interruptions."""
 
     def __init__(
-        self, hass: HomeAssistant, api: MarstekCtBleApi, poll_interval: int
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        api: MarstekCtBleApi,
+        poll_interval: int,
     ) -> None:
         self.api = api
         self._consecutive_failures = 0
@@ -28,6 +33,7 @@ class MarstekCtCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name="marstek_ct002",
             update_interval=timedelta(seconds=poll_interval),
             update_method=self._async_update_data,
@@ -70,11 +76,16 @@ class MarstekVenusCoordinator(
     """Poll configured Venus devices at a deliberately slower interval."""
 
     def __init__(
-        self, hass: HomeAssistant, api: MarstekVenusBleApi, poll_interval: int
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        api: MarstekVenusBleApi,
+        poll_interval: int,
     ) -> None:
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name="marstek_venus",
             update_interval=timedelta(seconds=poll_interval),
             update_method=api.async_fetch_all,
