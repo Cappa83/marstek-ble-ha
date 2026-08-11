@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, override
 
 import voluptuous as vol
 
+from homeassistant.components.bluetooth import (
+    async_discovered_service_info,
+    async_request_active_scan,
+)
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlowWithReload,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
@@ -29,10 +34,16 @@ from .const import (
     MIN_VENUS_POLL_INTERVAL,
     RECOMMENDED_MIN_CT_POLL_INTERVAL,
 )
-from .helpers import canonicalize_venus_devices, normalize_mac
+from .helpers import normalize_mac, parse_venus_devices
+
+_LOGGER = logging.getLogger(__name__)
+
+CONF_VENUS_NAME = "venus_name"
+
+CT_NAME_PREFIX = "MST-TPM_"
+VENUS_NAME_PREFIX = "MST_VNSE3_"
 
 _TEXT = selector.TextSelector(selector.TextSelectorConfig())
-_MULTILINE = selector.TextSelector(selector.TextSelectorConfig(multiline=True))
 _CT_INTERVAL = selector.NumberSelector(
     selector.NumberSelectorConfig(
         min=MIN_CT_POLL_INTERVAL,
@@ -52,29 +63,85 @@ _VENUS_INTERVAL = selector.NumberSelector(
     )
 )
 
-USER_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_CT_MAC): _TEXT,
-        vol.Optional(CONF_VENUS_DEVICES, default=""): _MULTILINE,
-        vol.Required(CONF_CT_POLL_INTERVAL, default=DEFAULT_CT_POLL_INTERVAL): _CT_INTERVAL,
-        vol.Required(
-            CONF_VENUS_POLL_INTERVAL, default=DEFAULT_VENUS_POLL_INTERVAL
-        ): _VENUS_INTERVAL,
-    }
-)
-
-OPTIONS_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_CT_POLL_INTERVAL): _CT_INTERVAL,
-        vol.Required(CONF_VENUS_POLL_INTERVAL): _VENUS_INTERVAL,
-        vol.Optional(CONF_VENUS_DEVICES): _MULTILINE,
-    }
-)
-
 
 def _fast_poll_requested(data: dict[str, Any]) -> bool:
     """Return whether CT polling is below the recommended interval."""
     return int(data[CONF_CT_POLL_INTERVAL]) < RECOMMENDED_MIN_CT_POLL_INTERVAL
+
+
+def _normalize_selected(values: list[str] | tuple[str, ...]) -> list[str]:
+    """Normalize and de-duplicate selected Bluetooth addresses."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        address = normalize_mac(str(value))
+        if address in seen:
+            continue
+        seen.add(address)
+        result.append(address)
+    return result
+
+
+def _discovered_marstek_devices(
+    hass: HomeAssistant,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Return connectable CT002 and Venus advertisements known by HA."""
+    ct_devices: dict[str, str] = {}
+    venus_devices: dict[str, str] = {}
+
+    for info in async_discovered_service_info(hass, connectable=True):
+        name = (info.name or "").strip()
+        if not name:
+            continue
+
+        try:
+            address = normalize_mac(info.address)
+        except ValueError:
+            continue
+
+        upper_name = name.upper()
+        if upper_name.startswith(CT_NAME_PREFIX):
+            ct_devices[address] = name
+        elif upper_name.startswith(VENUS_NAME_PREFIX):
+            venus_devices[address] = name
+
+    return ct_devices, venus_devices
+
+
+def _select_options(
+    devices: dict[str, str],
+) -> list[dict[str, str]]:
+    """Build selector options sorted by advertised/device name."""
+    return [
+        {"value": address, "label": f"{name} ({address})"}
+        for address, name in sorted(devices.items(), key=lambda item: item[1].lower())
+    ]
+
+
+def _device_selector(
+    options: list[dict[str, str]], *, multiple: bool
+) -> selector.SelectSelector:
+    """Build a scan-backed selector with manual MAC fallback."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=options,
+            multiple=multiple,
+            custom_value=True,
+        )
+    )
+
+
+def _venus_config_string(addresses: list[str], names: dict[str, str]) -> str:
+    """Build the persisted Venus device representation."""
+    return "\n".join(f"{names[address]}={address}" for address in addresses)
+
+
+async def _refresh_bluetooth_scan(hass: HomeAssistant) -> None:
+    """Request one fresh config-flow scan without making GATT requests."""
+    try:
+        await async_request_active_scan(hass, duration=3.0)
+    except Exception as err:  # Manual MAC entry remains available.
+        _LOGGER.debug("Bluetooth config-flow scan failed: %s", err)
 
 
 class MarstekConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -105,36 +172,107 @@ class MarstekConfigFlow(ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def _async_finish_user_devices(self) -> ConfigFlowResult:
+        """Finish Venus naming and continue to fast-poll confirmation/create."""
+        validated = dict(self._pending_user_base)
+        validated[CONF_VENUS_DEVICES] = _venus_config_string(
+            self._pending_venus_addresses,
+            self._pending_venus_names,
+        )
+
+        if _fast_poll_requested(validated):
+            self._pending_user_data = validated
+            return await self.async_step_confirm_fast_poll()
+        return await self._async_create_marstek_entry(validated)
+
     @override
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Select discovered devices and polling intervals."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             try:
                 ct_mac = normalize_mac(str(user_input[CONF_CT_MAC]))
-                venus_devices = canonicalize_venus_devices(
-                    str(user_input.get(CONF_VENUS_DEVICES, ""))
+                venus_addresses = _normalize_selected(
+                    list(user_input.get(CONF_VENUS_DEVICES, []))
                 )
             except ValueError:
                 errors["base"] = "invalid_mac"
             else:
-                validated = {
+                self._pending_user_base = {
                     CONF_CT_MAC: ct_mac,
                     CONF_CT_POLL_INTERVAL: int(user_input[CONF_CT_POLL_INTERVAL]),
                     CONF_VENUS_POLL_INTERVAL: int(
                         user_input[CONF_VENUS_POLL_INTERVAL]
                     ),
-                    CONF_VENUS_DEVICES: venus_devices,
                 }
-                if _fast_poll_requested(validated):
-                    self._pending_user_data = validated
-                    return await self.async_step_confirm_fast_poll()
-                return await self._async_create_marstek_entry(validated)
+                self._pending_venus_addresses = venus_addresses
+                self._pending_venus_names: dict[str, str] = {}
+                self._venus_name_index = 0
+
+                if venus_addresses:
+                    return await self.async_step_venus_name()
+                return await self._async_finish_user_devices()
+
+        if not getattr(self, "_scan_done", False):
+            await _refresh_bluetooth_scan(self.hass)
+            self._scan_done = True
+
+        ct_devices, venus_devices = _discovered_marstek_devices(self.hass)
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_CT_MAC): _device_selector(
+                    _select_options(ct_devices), multiple=False
+                ),
+                vol.Optional(CONF_VENUS_DEVICES, default=[]): _device_selector(
+                    _select_options(venus_devices), multiple=True
+                ),
+                vol.Required(
+                    CONF_CT_POLL_INTERVAL, default=DEFAULT_CT_POLL_INTERVAL
+                ): _CT_INTERVAL,
+                vol.Required(
+                    CONF_VENUS_POLL_INTERVAL, default=DEFAULT_VENUS_POLL_INTERVAL
+                ): _VENUS_INTERVAL,
+            }
+        )
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+
+    async def async_step_venus_name(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Name each selected Venus device individually."""
+        address = self._pending_venus_addresses[self._venus_name_index]
+        _, discovered_venus = _discovered_marstek_devices(self.hass)
+        default_name = discovered_venus.get(
+            address, f"Marstek Venus {address.replace(':', '')[-4:].lower()}"
+        )
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            name = str(user_input[CONF_VENUS_NAME]).strip()
+            if not name:
+                errors[CONF_VENUS_NAME] = "empty_name"
+            else:
+                self._pending_venus_names[address] = name
+                self._venus_name_index += 1
+                if self._venus_name_index < len(self._pending_venus_addresses):
+                    return await self.async_step_venus_name()
+                return await self._async_finish_user_devices()
 
         return self.async_show_form(
-            step_id="user", data_schema=USER_SCHEMA, errors=errors
+            step_id="venus_name",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_VENUS_NAME, default=default_name): _TEXT}
+            ),
+            errors=errors,
+            description_placeholders={
+                "device": discovered_venus.get(address, address),
+                "address": address,
+                "number": str(self._venus_name_index + 1),
+                "total": str(len(self._pending_venus_addresses)),
+            },
         )
 
     async def async_step_confirm_fast_poll(
@@ -161,49 +299,134 @@ class MarstekConfigFlow(ConfigFlow, domain=DOMAIN):
 class MarstekOptionsFlow(OptionsFlowWithReload):
     """Manage Marstek BLE polling and Venus devices."""
 
+    async def _async_finish_options_devices(self) -> ConfigFlowResult:
+        """Finish Venus naming and save/confirm the options."""
+        options = dict(self._pending_options_base)
+        options[CONF_VENUS_DEVICES] = _venus_config_string(
+            self._pending_venus_addresses,
+            self._pending_venus_names,
+        )
+
+        if _fast_poll_requested(options):
+            self._pending_options = options
+            return await self.async_step_confirm_fast_poll()
+        return self.async_create_entry(data=options)
+
     @override
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Select Venus devices and configure polling."""
         errors: dict[str, str] = {}
+        current_devices = parse_venus_devices(
+            self.config_entry.options.get(
+                CONF_VENUS_DEVICES,
+                self.config_entry.data.get(CONF_VENUS_DEVICES, ""),
+            )
+        )
+        current_names = {device.address: device.name for device in current_devices}
 
         if user_input is not None:
             try:
-                venus_devices = canonicalize_venus_devices(
-                    str(user_input.get(CONF_VENUS_DEVICES, ""))
+                venus_addresses = _normalize_selected(
+                    list(user_input.get(CONF_VENUS_DEVICES, []))
                 )
             except ValueError:
                 errors[CONF_VENUS_DEVICES] = "invalid_mac"
             else:
-                options = {
+                self._pending_options_base = {
                     CONF_CT_POLL_INTERVAL: int(user_input[CONF_CT_POLL_INTERVAL]),
                     CONF_VENUS_POLL_INTERVAL: int(
                         user_input[CONF_VENUS_POLL_INTERVAL]
                     ),
-                    CONF_VENUS_DEVICES: venus_devices,
                 }
-                if _fast_poll_requested(options):
-                    self._pending_options = options
-                    return await self.async_step_confirm_fast_poll()
-                return self.async_create_entry(data=options)
+                self._pending_venus_addresses = venus_addresses
+                self._pending_venus_names = {
+                    address: current_names[address]
+                    for address in venus_addresses
+                    if address in current_names
+                }
+                self._venus_name_index = 0
 
-        current = {
-            CONF_CT_POLL_INTERVAL: self.config_entry.options.get(
-                CONF_CT_POLL_INTERVAL, DEFAULT_CT_POLL_INTERVAL
-            ),
-            CONF_VENUS_POLL_INTERVAL: self.config_entry.options.get(
-                CONF_VENUS_POLL_INTERVAL, DEFAULT_VENUS_POLL_INTERVAL
-            ),
-            CONF_VENUS_DEVICES: self.config_entry.options.get(
-                CONF_VENUS_DEVICES,
-                self.config_entry.data.get(CONF_VENUS_DEVICES, ""),
-            ),
-        }
+                if venus_addresses:
+                    return await self.async_step_venus_name()
+                return await self._async_finish_options_devices()
+
+        if not getattr(self, "_scan_done", False):
+            await _refresh_bluetooth_scan(self.hass)
+            self._scan_done = True
+
+        _, discovered_venus = _discovered_marstek_devices(self.hass)
+        for device in current_devices:
+            discovered_venus.setdefault(device.address, device.name)
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_CT_POLL_INTERVAL,
+                    default=self.config_entry.options.get(
+                        CONF_CT_POLL_INTERVAL, DEFAULT_CT_POLL_INTERVAL
+                    ),
+                ): _CT_INTERVAL,
+                vol.Required(
+                    CONF_VENUS_POLL_INTERVAL,
+                    default=self.config_entry.options.get(
+                        CONF_VENUS_POLL_INTERVAL, DEFAULT_VENUS_POLL_INTERVAL
+                    ),
+                ): _VENUS_INTERVAL,
+                vol.Optional(
+                    CONF_VENUS_DEVICES,
+                    default=[device.address for device in current_devices],
+                ): _device_selector(
+                    _select_options(discovered_venus), multiple=True
+                ),
+            }
+        )
 
         return self.async_show_form(
             step_id="init",
-            data_schema=self.add_suggested_values_to_schema(OPTIONS_SCHEMA, current),
+            data_schema=schema,
             errors=errors,
+        )
+
+    async def async_step_venus_name(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Name each selected Venus device individually."""
+        address = self._pending_venus_addresses[self._venus_name_index]
+        _, discovered_venus = _discovered_marstek_devices(self.hass)
+
+        default_name = self._pending_venus_names.get(
+            address,
+            discovered_venus.get(
+                address, f"Marstek Venus {address.replace(':', '')[-4:].lower()}"
+            ),
+        )
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            name = str(user_input[CONF_VENUS_NAME]).strip()
+            if not name:
+                errors[CONF_VENUS_NAME] = "empty_name"
+            else:
+                self._pending_venus_names[address] = name
+                self._venus_name_index += 1
+                if self._venus_name_index < len(self._pending_venus_addresses):
+                    return await self.async_step_venus_name()
+                return await self._async_finish_options_devices()
+
+        return self.async_show_form(
+            step_id="venus_name",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_VENUS_NAME, default=default_name): _TEXT}
+            ),
+            errors=errors,
+            description_placeholders={
+                "device": discovered_venus.get(address, address),
+                "address": address,
+                "number": str(self._venus_name_index + 1),
+                "total": str(len(self._pending_venus_addresses)),
+            },
         )
 
     async def async_step_confirm_fast_poll(
