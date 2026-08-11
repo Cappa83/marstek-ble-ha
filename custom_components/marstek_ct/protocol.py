@@ -90,9 +90,8 @@ def parse_venus_bms(raw: bytes) -> dict[str, Any]:
     if not 0 <= soc <= 100:
         raise ValueError(f"Invalid SOC value: {soc}")
 
-    soh = int.from_bytes(payload[10:12], "little", signed=False)
-    if not 0 <= soh <= 100:
-        raise ValueError(f"Invalid SOH value: {soh}")
+    soh_raw = int.from_bytes(payload[10:12], "little", signed=False)
+    soh: int | None = soh_raw if 0 <= soh_raw <= 100 else None
 
     result: dict[str, Any] = {
         "soc": soc,
