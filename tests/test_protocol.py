@@ -79,7 +79,7 @@ def test_parse_live_venus_bms_frame() -> None:
     data = protocol.parse_venus_bms(raw)
 
     assert data["soc"] == 44
-    assert data["soh"] == 0
+    assert data["soh"] is None
     assert data["design_capacity"] == 5120
     assert data["battery_voltage"] == 53.19
     assert data["battery_current"] == 8.6
@@ -93,3 +93,14 @@ def test_parse_live_venus_bms_frame() -> None:
     assert data["cell_voltage_min"] == 3.322
     assert data["cell_voltage_max"] == 3.326
     assert data["cell_voltage_delta"] == 0.004
+
+
+def test_parse_venus_bms_preserves_real_soh_percentage() -> None:
+    payload = bytearray(48)
+    payload[8:10] = (62).to_bytes(2, "little")
+    payload[10:12] = (98).to_bytes(2, "little")
+
+    data = protocol.parse_venus_bms(_frame(0x14, bytes(payload)))
+
+    assert data["soc"] == 62
+    assert data["soh"] == 98
