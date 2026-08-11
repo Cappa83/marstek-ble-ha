@@ -1,0 +1,81 @@
+name: Publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version from manifest.json, for example 0.3.0b1 or 0.3.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Verify requested version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          requested = os.environ["VERSION"].strip()
+          if not re.fullmatch(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", requested):
+              raise SystemExit(f"Unsupported version format: {requested}")
+
+          manifest = json.loads(
+              Path("custom_components/marstek_ct/manifest.json").read_text()
+          )
+          actual = manifest["version"]
+          if actual != requested:
+              raise SystemExit(
+                  f"manifest version {actual!r} does not match requested {requested!r}"
+              )
+          print("version:", actual)
+          PY
+
+      - name: Compile and validate JSON
+        run: |
+          python3 -m compileall -q custom_components tests
+          python3 -m json.tool custom_components/marstek_ct/manifest.json >/dev/null
+          python3 -m json.tool custom_components/marstek_ct/translations/en.json >/dev/null
+          python3 -m json.tool custom_components/marstek_ct/translations/de.json >/dev/null
+          python3 -m json.tool hacs.json >/dev/null
+
+      - name: Run regression tests
+        run: |
+          python3 -m pip install --disable-pip-version-check pytest
+          pytest -q tests
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          TAG="v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists; nothing to publish."
+            exit 0
+          fi
+
+          EXTRA=()
+          if [[ "$VERSION" =~ (a|b|rc)[0-9]+$ ]]; then
+            EXTRA+=(--prerelease)
+          fi
+
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "Marstek BLE ${VERSION}" \
+            --generate-notes \
+            "${EXTRA[@]}"
