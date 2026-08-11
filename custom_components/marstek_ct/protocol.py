@@ -66,8 +66,69 @@ def parse_ct_runtime(raw: bytes) -> dict[str, Any]:
     }
 
 
+def _normalize_bms_temperature(raw: int) -> float:
+    """Normalize Marstek BMS temperature values to degrees Celsius."""
+    return raw / 10 if raw > 100 else float(raw)
+
+
+def parse_venus_bms(raw: bytes) -> dict[str, Any]:
+    """Decode verified Venus BMS Data fields from command 0x14.
+
+    The same 0x14 response already used for SOC also contains SOH, capacity,
+    voltage/current, temperatures, status codes and per-cell voltages.
+    No additional BLE request is required.
+    """
+    validate_frame(raw)
+    if raw[3] != 0x14:
+        raise ValueError(f"Unexpected response command: 0x{raw[3]:02x}")
+
+    payload = raw[4:-1]
+    if len(payload) < 48:
+        raise ValueError(f"BMS payload too short: {len(payload)}")
+
+    soc = int.from_bytes(payload[8:10], "little", signed=False)
+    if not 0 <= soc <= 100:
+        raise ValueError(f"Invalid SOC value: {soc}")
+
+    soh = int.from_bytes(payload[10:12], "little", signed=False)
+    if not 0 <= soh <= 100:
+        raise ValueError(f"Invalid SOH value: {soh}")
+
+    result: dict[str, Any] = {
+        "soc": soc,
+        "soh": soh,
+        "design_capacity": int.from_bytes(payload[12:14], "little", signed=False),
+        "battery_voltage": int.from_bytes(payload[14:16], "little", signed=False) / 100,
+        "battery_current": int.from_bytes(payload[16:18], "little", signed=True) / 10,
+        "battery_temperature": _normalize_bms_temperature(
+            int.from_bytes(payload[18:20], "little", signed=False)
+        ),
+        "error_code": int.from_bytes(payload[26:28], "little", signed=False),
+        "warning_code": int.from_bytes(payload[28:32], "little", signed=False),
+        "mosfet_temperature": _normalize_bms_temperature(
+            int.from_bytes(payload[38:40], "little", signed=False)
+        ),
+    }
+
+    cells: list[float] = []
+    for offset in range(48, min(len(payload), 82) - 1, 2):
+        millivolts = int.from_bytes(payload[offset : offset + 2], "little")
+        if 0 < millivolts < 5000:
+            cells.append(millivolts / 1000)
+
+    for index, voltage in enumerate(cells, start=1):
+        result[f"cell_voltage_{index}"] = voltage
+
+    if cells:
+        result["cell_voltage_min"] = min(cells)
+        result["cell_voltage_max"] = max(cells)
+        result["cell_voltage_delta"] = round(max(cells) - min(cells), 3)
+
+    return result
+
+
 def parse_venus_soc(raw: bytes) -> int:
-    """Decode the verified Venus BMS SOC field from command 0x14."""
+    """Decode the verified Venus SOC field from command 0x14."""
     validate_frame(raw)
     if raw[3] != 0x14:
         raise ValueError(f"Unexpected response command: 0x{raw[3]:02x}")
@@ -76,8 +137,7 @@ def parse_venus_soc(raw: bytes) -> int:
     if len(payload) < 10:
         raise ValueError(f"BMS payload too short: {len(payload)}")
 
-    # Verified in the live integration: payload offsets 8..9 = SOC, uint16 LE.
-    soc = int.from_bytes(payload[8:10], byteorder="little", signed=False)
+    soc = int.from_bytes(payload[8:10], "little", signed=False)
     if not 0 <= soc <= 100:
         raise ValueError(f"Invalid SOC value: {soc}")
     return soc
