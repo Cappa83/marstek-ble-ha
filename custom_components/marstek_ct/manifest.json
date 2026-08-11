@@ -1,0 +1,13 @@
+{
+  "domain": "marstek_ct",
+  "name": "Marstek BLE",
+  "codeowners": ["@Cappa83"],
+  "config_flow": true,
+  "dependencies": ["bluetooth"],
+  "documentation": "https://github.com/Cappa83/marstek-ble-ha",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/Cappa83/marstek-ble-ha/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
