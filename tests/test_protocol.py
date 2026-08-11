@@ -43,7 +43,7 @@ def test_parse_ct_runtime_signed_power() -> None:
     payload.extend((640).to_bytes(2, "little", signed=True))
     payload.extend((-15).to_bytes(2, "little", signed=True))
     payload.extend((500).to_bytes(2, "little", signed=True))
-    payload.extend(b"\xaa\xbb")  # unverified runtime tail must be ignored
+    payload.extend(b"\xaa\xbb")
 
     data = protocol.parse_ct_runtime(_frame(0x03, bytes(payload)))
 
@@ -59,7 +59,37 @@ def test_parse_ct_runtime_signed_power() -> None:
     }
 
 
-def test_parse_venus_soc() -> None:
+def test_parse_venus_soc_compatibility() -> None:
     payload = bytearray(10)
     payload[8:10] = (73).to_bytes(2, "little")
     assert protocol.parse_venus_soc(_frame(0x14, bytes(payload))) == 73
+
+
+def test_parse_live_venus_bms_frame() -> None:
+    raw = bytes.fromhex(
+        "73 55 23 14 "
+        "71 00 40 02 e8 03 e8 03 2c 00 00 00 00 14 c7 14 "
+        "56 00 1a 00 03 00 e5 00 00 00 00 00 00 00 00 00 "
+        "00 00 00 00 67 01 52 01 08 01 f7 00 fa 00 02 01 "
+        "fa 0c fd 0c fc 0c fc 0c fb 0c fe 0c fc 0c fb 0c "
+        "fb 0c fe 0c fc 0c fc 0c fb 0c fc 0c fb 0c fb 0c "
+        "56"
+    )
+
+    data = protocol.parse_venus_bms(raw)
+
+    assert data["soc"] == 44
+    assert data["soh"] == 0
+    assert data["design_capacity"] == 5120
+    assert data["battery_voltage"] == 53.19
+    assert data["battery_current"] == 8.6
+    assert data["battery_temperature"] == 26.0
+    assert data["error_code"] == 0
+    assert data["warning_code"] == 0
+    assert data["mosfet_temperature"] == 33.8
+
+    assert data["cell_voltage_1"] == 3.322
+    assert data["cell_voltage_16"] == 3.323
+    assert data["cell_voltage_min"] == 3.322
+    assert data["cell_voltage_max"] == 3.326
+    assert data["cell_voltage_delta"] == 0.004
