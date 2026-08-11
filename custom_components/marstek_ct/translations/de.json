@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Marstek BLE",
-        "description": "Lokale, rein lesende BLE-Integration. Der CT002 wird standardmäßig alle 5 Sekunden abgefragt. Venus-Geräte sind optional und werden separat mit einem langsameren Intervall abgefragt.",
+        "description": "Lokale, rein lesende BLE-Integration. Der CT002 wird standardmäßig alle 5 Sekunden abgefragt. 1 bis 4 Sekunden sind möglich, können die BLE-/Gerätelast aber deutlich erhöhen. Venus-Geräte sind optional und werden separat mit einem langsameren Intervall abgefragt.",
         "data": {
           "ct_mac": "Bluetooth-MAC-Adresse des CT002",
           "ct_poll_interval": "CT002-Abfrageintervall",
@@ -12,8 +12,13 @@
           "venus_devices": "Venus-Geräte (eine Zeile je Gerät: Name=Bluetooth-MAC)"
         },
         "data_description": {
+          "ct_poll_interval": "Standard und Empfehlung: 5 s. Zulässig: 1 bis 300 s.",
           "venus_devices": "Beispiel: Speicher 1=00:11:22:33:44:55. Der Name ist optional; nur die MAC-Adresse ist ebenfalls zulässig."
         }
+      },
+      "confirm_fast_poll": {
+        "title": "Schnelles CT002-Polling bestätigen",
+        "description": "Gewählt sind {seconds} Sekunden. Unter {recommended} Sekunden steigt die BLE- und Gerätelast deutlich; einzelne CT002 können dadurch instabil werden. Die Integration begrenzt das Intervall bewusst nicht weiter. Mit Senden bestätigst du, dass du dieses Intervall auf eigenes Risiko verwenden möchtest."
       }
     },
     "error": {
@@ -27,15 +32,20 @@
     "step": {
       "init": {
         "title": "Marstek-BLE-Optionen",
-        "description": "Die Polling-Einstellungen werden nach dem Speichern übernommen; die Integration wird automatisch neu geladen. Das CT002-Intervall kann zum Schutz vor übermäßiger BLE-Last nicht unter 5 Sekunden gesetzt werden.",
+        "description": "Die Polling-Einstellungen werden nach dem Speichern übernommen; die Integration wird automatisch neu geladen. Standard und Empfehlung für den CT002 sind 5 Sekunden. Werte von 1 bis 4 Sekunden sind erlaubt, werden aber vor dem Speichern ausdrücklich bestätigt.",
         "data": {
           "ct_poll_interval": "CT002-Abfrageintervall",
           "venus_poll_interval": "Venus-Abfrageintervall",
           "venus_devices": "Venus-Geräte (eine Zeile je Gerät: Name=Bluetooth-MAC)"
         },
         "data_description": {
+          "ct_poll_interval": "Standard und Empfehlung: 5 s. Zulässig: 1 bis 300 s.",
           "venus_devices": "Venus-Geräte hier hinzufügen, umbenennen oder entfernen."
         }
+      },
+      "confirm_fast_poll": {
+        "title": "Schnelles CT002-Polling bestätigen",
+        "description": "Gewählt sind {seconds} Sekunden. Unter {recommended} Sekunden steigt die BLE- und Gerätelast deutlich; einzelne CT002 können dadurch instabil werden. Die Integration begrenzt das Intervall bewusst nicht weiter. Mit Senden bestätigst du, dass du dieses Intervall auf eigenes Risiko verwenden möchtest."
       }
     },
     "error": {
