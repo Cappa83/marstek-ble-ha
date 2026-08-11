@@ -16,8 +16,11 @@ from homeassistant.const import (
     EntityCategory,
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    UnitOfElectricCurrent,
     UnitOfElectricPotential,
+    UnitOfEnergy,
     UnitOfPower,
+    UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -30,6 +33,11 @@ from .const import CT_MODEL, DOMAIN, VENUS_MODEL
 @dataclass(frozen=True, kw_only=True)
 class MarstekCtSensorDescription(SensorEntityDescription):
     """CT sensor description."""
+
+
+@dataclass(frozen=True, kw_only=True)
+class MarstekVenusSensorDescription(SensorEntityDescription):
+    """Venus sensor description."""
 
 
 CT_SENSORS: tuple[MarstekCtSensorDescription, ...] = (
@@ -106,6 +114,126 @@ CT_SENSORS: tuple[MarstekCtSensorDescription, ...] = (
 )
 
 
+VENUS_SENSORS: tuple[MarstekVenusSensorDescription, ...] = (
+    MarstekVenusSensorDescription(
+        key="soc",
+        translation_key="venus_soc",
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    MarstekVenusSensorDescription(
+        key="soh",
+        translation_key="venus_soh",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    MarstekVenusSensorDescription(
+        key="battery_voltage",
+        translation_key="venus_battery_voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+    ),
+    MarstekVenusSensorDescription(
+        key="battery_current",
+        translation_key="venus_battery_current",
+        device_class=SensorDeviceClass.CURRENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+    ),
+    MarstekVenusSensorDescription(
+        key="battery_temperature",
+        translation_key="venus_battery_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+    ),
+    MarstekVenusSensorDescription(
+        key="cell_voltage_min",
+        translation_key="venus_cell_voltage_min",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    MarstekVenusSensorDescription(
+        key="cell_voltage_max",
+        translation_key="venus_cell_voltage_max",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    MarstekVenusSensorDescription(
+        key="cell_voltage_delta",
+        translation_key="venus_cell_voltage_delta",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    MarstekVenusSensorDescription(
+        key="design_capacity",
+        translation_key="venus_design_capacity",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    MarstekVenusSensorDescription(
+        key="mosfet_temperature",
+        translation_key="venus_mosfet_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    MarstekVenusSensorDescription(
+        key="error_code",
+        translation_key="venus_error_code",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    MarstekVenusSensorDescription(
+        key="warning_code",
+        translation_key="venus_warning_code",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    MarstekVenusSensorDescription(
+        key="ble_rssi",
+        translation_key="venus_ble_rssi",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+) + tuple(
+    MarstekVenusSensorDescription(
+        key=f"cell_voltage_{cell}",
+        translation_key="venus_cell_voltage",
+        translation_placeholders={"cell": str(cell)},
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    )
+    for cell in range(1, 17)
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -121,21 +249,14 @@ async def async_setup_entry(
 
     if runtime.venus_coordinator is not None:
         for device in runtime.venus_devices:
-            entities.append(
+            entities.extend(
                 MarstekVenusSensor(
                     runtime.venus_coordinator,
                     device.address,
                     device.name,
-                    "soc",
+                    description,
                 )
-            )
-            entities.append(
-                MarstekVenusSensor(
-                    runtime.venus_coordinator,
-                    device.address,
-                    device.name,
-                    "ble_rssi",
-                )
+                for description in VENUS_SENSORS
             )
 
     async_add_entities(entities)
@@ -178,32 +299,26 @@ class MarstekCtSensor(CoordinatorEntity, SensorEntity):
 
 
 class MarstekVenusSensor(CoordinatorEntity, SensorEntity):
-    """One verified Venus BLE sensor."""
+    """One Venus BLE sensor sourced from the shared BMS poll."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator, address: str, name: str, key: str) -> None:
+    def __init__(
+        self,
+        coordinator,
+        address: str,
+        name: str,
+        description: MarstekVenusSensorDescription,
+    ) -> None:
         super().__init__(coordinator)
+        self.entity_description = description
         self._device_key = address.replace(":", "").lower()
-        self._value_key = key
 
-        if key == "soc":
-            self._attr_translation_key = "venus_soc"
-            self._attr_device_class = SensorDeviceClass.BATTERY
-            self._attr_native_unit_of_measurement = PERCENTAGE
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            suffix = "soc"
-        else:
-            self._attr_translation_key = "venus_ble_rssi"
-            self._attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
-            self._attr_native_unit_of_measurement = SIGNAL_STRENGTH_DECIBELS_MILLIWATT
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_entity_category = EntityCategory.DIAGNOSTIC
-            self._attr_entity_registry_enabled_default = False
-            suffix = "ble_rssi"
-
-        # Preserve the existing SOC unique-id shape from the live installation.
-        self._attr_unique_id = f"marstek_venus_{self._device_key}_{suffix}"
+        # Preserve the existing SOC and BLE-RSSI unique-id shapes while using
+        # the same deterministic suffix pattern for all new BMS sensors.
+        self._attr_unique_id = (
+            f"marstek_venus_{self._device_key}_{description.key}"
+        )
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"marstek_venus_{self._device_key}")},
             "name": name,
@@ -215,4 +330,4 @@ class MarstekVenusSensor(CoordinatorEntity, SensorEntity):
     def native_value(self) -> Any:
         data = self.coordinator.data or {}
         device_data = data.get(self._device_key) or {}
-        return device_data.get(self._value_key)
+        return device_data.get(self.entity_description.key)
