@@ -1,0 +1,83 @@
+"""Verified Marstek BLE protocol parsing used by the integration."""
+
+from __future__ import annotations
+
+from typing import Any
+
+RUNTIME_REQUEST = bytes.fromhex("73 05 23 03 56")
+BMS_SOC_REQUEST = bytes.fromhex("73 05 23 14 41")
+
+
+def xor_checksum(data: bytes) -> int:
+    """Return XOR checksum over all bytes."""
+    value = 0
+    for byte in data:
+        value ^= byte
+    return value
+
+
+def validate_frame(raw: bytes) -> None:
+    """Validate the common Marstek BLE frame envelope."""
+    if len(raw) < 5:
+        raise ValueError(f"BLE response too short: {len(raw)} bytes")
+    if raw[0] != 0x73:
+        raise ValueError(f"Invalid start byte: 0x{raw[0]:02x}")
+    if raw[1] != len(raw):
+        raise ValueError(
+            f"BLE frame length mismatch: declared={raw[1]} actual={len(raw)}"
+        )
+    if raw[2] != 0x23:
+        raise ValueError(f"Invalid protocol byte: 0x{raw[2]:02x}")
+    checksum = xor_checksum(raw)
+    if checksum != 0:
+        raise ValueError(f"Invalid BLE XOR checksum: 0x{checksum:02x}")
+
+
+def parse_ct_runtime(raw: bytes) -> dict[str, Any]:
+    """Decode the verified CT002 Runtime Info (command 0x03) fields."""
+    validate_frame(raw)
+    if raw[3] != 0x03:
+        raise ValueError(f"Unexpected BLE command response: 0x{raw[3]:02x}")
+
+    payload = raw[4:-1]
+
+    # Observed and validated CT002 HME-4 v124 layout:
+    # 00      uint8      device version
+    # 01..02  uint16 LE  phase A voltage
+    # 03..04  uint16 LE  phase B voltage
+    # 05..06  uint16 LE  phase C voltage
+    # 07..08  int16 LE   phase A power
+    # 09..10  int16 LE   phase B power
+    # 11..12  int16 LE   phase C power
+    # 13..14  int16 LE   total power
+    # Bytes from offset 15 onward intentionally remain uninterpreted.
+    if len(payload) < 15:
+        raise ValueError(f"CT002 Runtime Info payload too short: {len(payload)} bytes")
+
+    return {
+        "device_version": payload[0],
+        "voltage_a": int.from_bytes(payload[1:3], "little", signed=False),
+        "voltage_b": int.from_bytes(payload[3:5], "little", signed=False),
+        "voltage_c": int.from_bytes(payload[5:7], "little", signed=False),
+        "phase_a_power": int.from_bytes(payload[7:9], "little", signed=True),
+        "phase_b_power": int.from_bytes(payload[9:11], "little", signed=True),
+        "phase_c_power": int.from_bytes(payload[11:13], "little", signed=True),
+        "total_power": int.from_bytes(payload[13:15], "little", signed=True),
+    }
+
+
+def parse_venus_soc(raw: bytes) -> int:
+    """Decode the verified Venus BMS SOC field from command 0x14."""
+    validate_frame(raw)
+    if raw[3] != 0x14:
+        raise ValueError(f"Unexpected response command: 0x{raw[3]:02x}")
+
+    payload = raw[4:-1]
+    if len(payload) < 10:
+        raise ValueError(f"BMS payload too short: {len(payload)}")
+
+    # Verified in the live integration: payload offsets 8..9 = SOC, uint16 LE.
+    soc = int.from_bytes(payload[8:10], byteorder="little", signed=False)
+    if not 0 <= soc <= 100:
+        raise ValueError(f"Invalid SOC value: {soc}")
+    return soc
