@@ -242,10 +242,18 @@ async def async_setup_entry(
     """Set up Marstek BLE sensors."""
     runtime: MarstekRuntimeData = hass.data[DOMAIN][entry.entry_id]
 
-    entities: list[SensorEntity] = [
-        MarstekCtSensor(runtime.ct_coordinator, description, entry)
-        for description in CT_SENSORS
-    ]
+    entities: list[SensorEntity] = []
+
+    if runtime.ct_coordinator is not None and runtime.ct_mac is not None:
+        entities.extend(
+            MarstekCtSensor(
+                runtime.ct_coordinator,
+                description,
+                entry,
+                runtime.ct_mac,
+            )
+            for description in CT_SENSORS
+        )
 
     if runtime.venus_coordinator is not None:
         for device in runtime.venus_devices:
@@ -267,11 +275,16 @@ class MarstekCtSensor(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator, description, entry: ConfigEntry) -> None:
+    def __init__(
+        self,
+        coordinator,
+        description: MarstekCtSensorDescription,
+        entry: ConfigEntry,
+        ct_mac: str,
+    ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
 
-        ct_mac = str(entry.data["ct_mac"])
         normalized = ct_mac.replace(":", "").replace("-", "").lower()
         legacy_battery_mac = entry.data.get("battery_mac")
 
@@ -316,9 +329,7 @@ class MarstekVenusSensor(CoordinatorEntity, SensorEntity):
 
         # Preserve the existing SOC and BLE-RSSI unique-id shapes while using
         # the same deterministic suffix pattern for all new BMS sensors.
-        self._attr_unique_id = (
-            f"marstek_venus_{self._device_key}_{description.key}"
-        )
+        self._attr_unique_id = f"marstek_venus_{self._device_key}_{description.key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"marstek_venus_{self._device_key}")},
             "name": name,
