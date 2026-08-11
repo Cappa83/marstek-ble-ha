@@ -16,8 +16,3 @@ class VenusDevice:
     def key(self) -> str:
         """Return a stable lower-case MAC key without separators."""
         return self.address.replace(":", "").lower()
-
-    @property
-    def suffix(self) -> str:
-        """Return the last four MAC characters."""
-        return self.key[-4:]
