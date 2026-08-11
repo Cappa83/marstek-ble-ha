@@ -16,7 +16,7 @@ from homeassistant.components.bluetooth import (
 from homeassistant.core import HomeAssistant
 
 from .models import VenusDevice
-from .protocol import BMS_SOC_REQUEST, parse_venus_soc
+from .protocol import BMS_SOC_REQUEST, parse_venus_bms
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,11 +32,13 @@ class MarstekVenusBleApi:
     def __init__(self, hass: HomeAssistant, devices: tuple[VenusDevice, ...]) -> None:
         self._hass = hass
         self._devices = devices
-        self._last: dict[str, dict[str, int | None]] = {
+        self._last: dict[str, dict[str, int | float | None]] = {
             device.key: {"soc": None, "ble_rssi": None} for device in devices
         }
 
-    async def _fetch_one(self, device_config: VenusDevice) -> tuple[int, int | None]:
+    async def _fetch_one(
+        self, device_config: VenusDevice
+    ) -> dict[str, int | float | None]:
         address = device_config.address
         name = device_config.name
 
@@ -119,7 +121,10 @@ class MarstekVenusBleApi:
             notify_started = True
             await client.write_gatt_char(tx_char, BMS_SOC_REQUEST, response=False)
             raw = await asyncio.wait_for(response_future, timeout=RESPONSE_TIMEOUT)
-            return parse_venus_soc(raw), rssi
+
+            values = parse_venus_bms(raw)
+            values["ble_rssi"] = rssi
+            return values
         finally:
             if (
                 client is not None
@@ -137,17 +142,19 @@ class MarstekVenusBleApi:
                 except Exception:
                     pass
 
-    async def async_fetch_all(self) -> dict[str, dict[str, int | None]]:
+    async def async_fetch_all(self) -> dict[str, dict[str, int | float | None]]:
         """Read all configured Venus units sequentially, once per polling cycle."""
         for device in self._devices:
             try:
-                soc, rssi = await self._fetch_one(device)
-                self._last[device.key] = {"soc": soc, "ble_rssi": rssi}
+                values = await self._fetch_one(device)
+                self._last[device.key] = values
                 _LOGGER.debug(
-                    "Marstek Venus %s: soc=%d%% rssi=%s",
+                    "Marstek Venus %s: soc=%s%% voltage=%sV current=%sA rssi=%s",
                     device.address,
-                    soc,
-                    rssi,
+                    values.get("soc"),
+                    values.get("battery_voltage"),
+                    values.get("battery_current"),
+                    values.get("ble_rssi"),
                 )
             except Exception as err:
                 _LOGGER.warning(
