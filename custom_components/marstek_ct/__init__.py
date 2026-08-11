@@ -54,13 +54,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     ct_api = MarstekCtBleApi(hass, ct_mac)
-    ct_coordinator = MarstekCtCoordinator(hass, ct_api, ct_poll_interval)
+    ct_coordinator = MarstekCtCoordinator(hass, entry, ct_api, ct_poll_interval)
 
     venus_coordinator: MarstekVenusCoordinator | None = None
     if venus_devices:
         venus_api = MarstekVenusBleApi(hass, venus_devices)
         venus_coordinator = MarstekVenusCoordinator(
-            hass, venus_api, venus_poll_interval
+            hass, entry, venus_api, venus_poll_interval
         )
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = MarstekRuntimeData(
