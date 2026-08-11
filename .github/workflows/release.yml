@@ -2,11 +2,11 @@ name: Publish release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version from manifest.json, for example 0.3.0b1 or 0.3.0"
-        required: true
-        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - custom_components/marstek_ct/manifest.json
 
 permissions:
   contents: write
@@ -20,30 +20,27 @@ jobs:
         with:
           ref: main
 
-      - name: Verify requested version
-        env:
-          VERSION: ${{ inputs.version }}
+      - name: Read and verify manifest version
+        id: version
         run: |
           python3 - <<'PY'
           import json
-          import os
           import re
           from pathlib import Path
-
-          requested = os.environ["VERSION"].strip()
-          if not re.fullmatch(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", requested):
-              raise SystemExit(f"Unsupported version format: {requested}")
 
           manifest = json.loads(
               Path("custom_components/marstek_ct/manifest.json").read_text()
           )
-          actual = manifest["version"]
-          if actual != requested:
-              raise SystemExit(
-                  f"manifest version {actual!r} does not match requested {requested!r}"
-              )
-          print("version:", actual)
+          version = str(manifest["version"]).strip()
+          if not re.fullmatch(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", version):
+              raise SystemExit(f"Unsupported version format: {version}")
+
+          with open(Path.cwd() / Path("version.out"), "w") as out:
+              out.write(version)
+          print("version:", version)
           PY
+          echo "version=$(cat version.out)" >> "$GITHUB_OUTPUT"
+          rm version.out
 
       - name: Compile and validate JSON
         run: |
@@ -61,7 +58,7 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           TAG="v${VERSION}"
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -74,8 +71,16 @@ jobs:
             EXTRA+=(--prerelease)
           fi
 
+          NOTES=()
+          NOTES_FILE="RELEASE_NOTES_${VERSION}.md"
+          if [[ -f "$NOTES_FILE" ]]; then
+            NOTES+=(--notes-file "$NOTES_FILE")
+          else
+            NOTES+=(--generate-notes)
+          fi
+
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
             --title "Marstek BLE ${VERSION}" \
-            --generate-notes \
+            "${NOTES[@]}" \
             "${EXTRA[@]}"
