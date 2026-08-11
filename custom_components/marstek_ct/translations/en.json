@@ -4,17 +4,17 @@
     "step": {
       "user": {
         "title": "Marstek BLE",
-        "description": "Home Assistant scans the currently known connectable BLE devices, including Bluetooth proxies. CT002 and Venus devices can be selected from the list; a MAC address can still be entered manually. CT002 polling defaults to 5 seconds.",
+        "description": "Home Assistant scans the currently known connectable BLE devices, including Bluetooth proxies. CT002 and Venus devices can be selected independently; at least one device is required. MAC addresses can still be entered manually.",
         "data": {
-          "ct_mac": "CT002",
+          "ct_mac": "CT002 (optional)",
           "venus_devices": "Venus devices",
           "ct_poll_interval": "CT002 polling interval",
           "venus_poll_interval": "Venus polling interval"
         },
         "data_description": {
-          "ct_mac": "Detected CT002 units appear as MST-TPM_… with their Bluetooth MAC. The MAC can be entered manually if needed.",
-          "venus_devices": "Select multiple detected Venus devices. Each selected device can then be named individually.",
-          "ct_poll_interval": "Default and recommended: 5 s. Allowed: 1 to 300 s.",
+          "ct_mac": "Optional. Detected CT002 units appear as MST-TPM_… with their Bluetooth MAC. The MAC can be entered manually if needed.",
+          "venus_devices": "Select one or more detected Venus devices. Each selected device can then be named individually.",
+          "ct_poll_interval": "Only used when a CT002 is configured. Default and recommended: 5 s. Allowed: 1 to 300 s.",
           "venus_poll_interval": "Default: 150 s. Each cycle reads all selected Venus devices sequentially."
         }
       },
@@ -32,24 +32,27 @@
     },
     "error": {
       "invalid_mac": "At least one Bluetooth MAC address is invalid.",
-      "empty_name": "The name must not be empty."
+      "empty_name": "The name must not be empty.",
+      "no_devices": "Select at least one CT002 or Venus device."
     },
     "abort": {
-      "already_configured": "This CT002 is already configured."
+      "already_configured": "This Marstek BLE configuration already exists."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Marstek BLE options",
-        "description": "Home Assistant shows detected Venus devices from the Bluetooth manager, including proxies. Already configured devices remain selectable even when they are not currently seen. The integration reloads automatically after saving.",
+        "description": "CT002 and Venus devices can be added or removed independently. Home Assistant shows detected devices from the Bluetooth manager, including proxies. Already configured devices remain selectable even when they are not currently seen. The integration reloads automatically after saving.",
         "data": {
+          "ct_mac": "CT002 (optional)",
           "ct_poll_interval": "CT002 polling interval",
           "venus_poll_interval": "Venus polling interval",
           "venus_devices": "Venus devices"
         },
         "data_description": {
-          "ct_poll_interval": "Default and recommended: 5 s. Allowed: 1 to 300 s.",
+          "ct_mac": "Optional. Select, change, or remove it. Without a CT002 the integration runs with the configured Venus devices only.",
+          "ct_poll_interval": "Only used when a CT002 is configured. Default and recommended: 5 s. Allowed: 1 to 300 s.",
           "venus_poll_interval": "Default: 150 s. One poll reads all selected Venus devices sequentially.",
           "venus_devices": "Select, add, or remove devices. Each selected device can then be named individually."
         }
@@ -67,8 +70,9 @@
       }
     },
     "error": {
-      "invalid_mac": "At least one Venus Bluetooth MAC address is invalid.",
-      "empty_name": "The name must not be empty."
+      "invalid_mac": "At least one Bluetooth MAC address is invalid.",
+      "empty_name": "The name must not be empty.",
+      "no_devices": "Select at least one CT002 or Venus device."
     }
   },
   "entity": {
