@@ -4,16 +4,25 @@
     "step": {
       "user": {
         "title": "Marstek BLE",
-        "description": "Read-only local BLE integration. CT002 polling defaults to 5 seconds. Intervals from 1 to 4 seconds are allowed but can significantly increase BLE/device load. Venus devices are optional and are polled separately at a slower interval.",
+        "description": "Home Assistant scans the currently known connectable BLE devices, including Bluetooth proxies. CT002 and Venus devices can be selected from the list; a MAC address can still be entered manually. CT002 polling defaults to 5 seconds.",
         "data": {
-          "ct_mac": "CT002 Bluetooth MAC address",
+          "ct_mac": "CT002",
+          "venus_devices": "Venus devices",
           "ct_poll_interval": "CT002 polling interval",
-          "venus_poll_interval": "Venus polling interval",
-          "venus_devices": "Venus devices (one per line: Name=Bluetooth MAC)"
+          "venus_poll_interval": "Venus polling interval"
         },
         "data_description": {
+          "ct_mac": "Detected CT002 units appear as MST-TPM_… with their Bluetooth MAC. The MAC can be entered manually if needed.",
+          "venus_devices": "Select multiple detected Venus devices. Each selected device can then be named individually.",
           "ct_poll_interval": "Default and recommended: 5 s. Allowed: 1 to 300 s.",
-          "venus_devices": "Example: Battery 1=00:11:22:33:44:55. A name is optional; a bare MAC address is also accepted."
+          "venus_poll_interval": "Default: 150 s. Each cycle reads all selected Venus devices sequentially."
+        }
+      },
+      "venus_name": {
+        "title": "Name Venus ({number}/{total})",
+        "description": "Device: {device}\nBluetooth MAC: {address}",
+        "data": {
+          "venus_name": "Name"
         }
       },
       "confirm_fast_poll": {
@@ -22,7 +31,8 @@
       }
     },
     "error": {
-      "invalid_mac": "At least one Bluetooth MAC address is invalid."
+      "invalid_mac": "At least one Bluetooth MAC address is invalid.",
+      "empty_name": "The name must not be empty."
     },
     "abort": {
       "already_configured": "This CT002 is already configured."
@@ -32,15 +42,23 @@
     "step": {
       "init": {
         "title": "Marstek BLE options",
-        "description": "Polling settings apply after saving and the integration reloads automatically. The CT002 default and recommendation is 5 seconds. Values from 1 to 4 seconds are allowed but require explicit confirmation before saving.",
+        "description": "Home Assistant shows detected Venus devices from the Bluetooth manager, including proxies. Already configured devices remain selectable even when they are not currently seen. The integration reloads automatically after saving.",
         "data": {
           "ct_poll_interval": "CT002 polling interval",
           "venus_poll_interval": "Venus polling interval",
-          "venus_devices": "Venus devices (one per line: Name=Bluetooth MAC)"
+          "venus_devices": "Venus devices"
         },
         "data_description": {
           "ct_poll_interval": "Default and recommended: 5 s. Allowed: 1 to 300 s.",
-          "venus_devices": "Add, rename, or remove Venus devices here."
+          "venus_poll_interval": "Default: 150 s. One poll reads all selected Venus devices sequentially.",
+          "venus_devices": "Select, add, or remove devices. Each selected device can then be named individually."
+        }
+      },
+      "venus_name": {
+        "title": "Name Venus ({number}/{total})",
+        "description": "Device: {device}\nBluetooth MAC: {address}",
+        "data": {
+          "venus_name": "Name"
         }
       },
       "confirm_fast_poll": {
@@ -49,7 +67,8 @@
       }
     },
     "error": {
-      "invalid_mac": "At least one Venus Bluetooth MAC address is invalid."
+      "invalid_mac": "At least one Venus Bluetooth MAC address is invalid.",
+      "empty_name": "The name must not be empty."
     }
   },
   "entity": {
@@ -64,6 +83,18 @@
       "ble_rssi": {"name": "BLE signal strength"},
       "device_version": {"name": "Device version"},
       "venus_soc": {"name": "SOC"},
+      "venus_soh": {"name": "State of health (SOH)"},
+      "venus_battery_voltage": {"name": "Battery voltage"},
+      "venus_battery_current": {"name": "Battery current"},
+      "venus_battery_temperature": {"name": "Battery temperature"},
+      "venus_design_capacity": {"name": "Design capacity"},
+      "venus_mosfet_temperature": {"name": "MOSFET temperature"},
+      "venus_error_code": {"name": "Error code"},
+      "venus_warning_code": {"name": "Warning code"},
+      "venus_cell_voltage_min": {"name": "Minimum cell voltage"},
+      "venus_cell_voltage_max": {"name": "Maximum cell voltage"},
+      "venus_cell_voltage_delta": {"name": "Cell voltage delta"},
+      "venus_cell_voltage": {"name": "Cell {cell} voltage"},
       "venus_ble_rssi": {"name": "BLE signal strength"}
     }
   }
