@@ -12,7 +12,19 @@ Current verified support:
   - raw device version byte (diagnostic, disabled by default)
 - **Marstek Venus E V3**
   - state of charge (SOC)
+  - state of health (SOH)
+  - battery voltage and signed battery current
+  - battery temperature
+  - minimum, maximum and delta cell voltage
+  - design capacity (diagnostic, disabled by default)
+  - MOSFET temperature (diagnostic, disabled by default)
+  - BMS error and warning codes (diagnostic, disabled by default)
+  - 16 individual cell voltages (diagnostic, disabled by default)
   - BLE RSSI (diagnostic, disabled by default)
+
+All Venus BMS values above come from the same read-only `0x14` response that is
+already used for SOC. Enabling the additional sensors does **not** add BLE
+requests or increase the Venus polling frequency.
 
 The integration uses Home Assistant's native Bluetooth stack, so compatible Home Assistant Bluetooth proxies can be used transparently.
 
@@ -20,7 +32,7 @@ The integration uses Home Assistant's native Bluetooth stack, so compatible Home
 
 This integration is **read-only**. It does not control charging, discharging, or the Marstek EMS.
 
-Only protocol fields that were verified against live devices are exposed. Unknown bytes are deliberately left uninterpreted until their meaning has been independently verified.
+Only protocol fields that were verified against live devices and the community-documented Marstek HM BLE layout are exposed. Unknown bytes are deliberately left uninterpreted until their meaning has been independently verified.
 
 ### Polling
 
@@ -32,6 +44,7 @@ Only protocol fields that were verified against live devices are exposed. Unknow
 - one connection attempt per polling cycle; no immediate retry loop
 - CT002 uses one persistent BLE connection while available
 - Venus devices are queried sequentially and disconnected after each read
+- one Venus poll sends one BMS `0x14` request and updates all Venus BMS sensors from that response
 
 The CT002 has shown sensitivity to aggressive BLE traffic in real-world use. Faster polling is therefore available for users who want to test it, but individual devices may become less stable below the recommended 5-second interval.
 
@@ -39,20 +52,23 @@ The CT002 has shown sensitivity to aggressive BLE traffic in real-world use. Fas
 
 Add **Marstek BLE** from Home Assistant's integrations UI.
 
-Required:
+The config flow requests a fresh Home Assistant Bluetooth scan and offers detected
+Marstek devices from all registered scanners, including Bluetooth proxies:
 
-- CT002 Bluetooth MAC address
+- CT002 advertisements named `MST-TPM_…`
+- Venus E V3 advertisements named `MST_VNSE3_…`
 
-Optional Venus devices can be entered one per line:
+Select the CT002 and any Venus devices from the discovered list. Each selected
+Venus is then named individually. Manual Bluetooth MAC entry remains available
+as a fallback.
 
-```text
-Battery 1=00:11:22:33:44:55
-Battery 2=66:77:88:99:AA:BB
-```
+Polling intervals and the Venus device selection can be changed later under
+**Configure**. Already configured Venus devices remain selectable even if they
+are temporarily not visible during a scan. Saving the options reloads the
+integration automatically.
 
-A bare MAC address is also accepted; a display name will then be generated automatically.
-
-Polling intervals and the Venus device list can be changed later under **Configure**. Saving the options reloads the integration automatically.
+Internally the existing `Name=Bluetooth-MAC` representation is retained, so
+existing installations do not need a configuration migration for the new UI.
 
 ## Existing `marstek_ct` installations
 
