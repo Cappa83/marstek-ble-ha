@@ -1,0 +1,60 @@
+{
+  "title": "Marstek BLE",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Marstek BLE",
+        "description": "Lokale, rein lesende BLE-Integration. Der CT002 wird standardmäßig alle 5 Sekunden abgefragt. Venus-Geräte sind optional und werden separat mit einem langsameren Intervall abgefragt.",
+        "data": {
+          "ct_mac": "Bluetooth-MAC-Adresse des CT002",
+          "ct_poll_interval": "CT002-Abfrageintervall",
+          "venus_poll_interval": "Venus-Abfrageintervall",
+          "venus_devices": "Venus-Geräte (eine Zeile je Gerät: Name=Bluetooth-MAC)"
+        },
+        "data_description": {
+          "venus_devices": "Beispiel: Speicher 1=00:11:22:33:44:55. Der Name ist optional; nur die MAC-Adresse ist ebenfalls zulässig."
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "Mindestens eine Bluetooth-MAC-Adresse ist ungültig."
+    },
+    "abort": {
+      "already_configured": "Dieser CT002 ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Marstek-BLE-Optionen",
+        "description": "Die Polling-Einstellungen werden nach dem Speichern übernommen; die Integration wird automatisch neu geladen. Das CT002-Intervall kann zum Schutz vor übermäßiger BLE-Last nicht unter 5 Sekunden gesetzt werden.",
+        "data": {
+          "ct_poll_interval": "CT002-Abfrageintervall",
+          "venus_poll_interval": "Venus-Abfrageintervall",
+          "venus_devices": "Venus-Geräte (eine Zeile je Gerät: Name=Bluetooth-MAC)"
+        },
+        "data_description": {
+          "venus_devices": "Venus-Geräte hier hinzufügen, umbenennen oder entfernen."
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "Mindestens eine Venus-Bluetooth-MAC-Adresse ist ungültig."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_power": {"name": "Gesamtleistung"},
+      "phase_a_power": {"name": "Phase A Leistung"},
+      "phase_b_power": {"name": "Phase B Leistung"},
+      "phase_c_power": {"name": "Phase C Leistung"},
+      "voltage_a": {"name": "Phase A Spannung"},
+      "voltage_b": {"name": "Phase B Spannung"},
+      "voltage_c": {"name": "Phase C Spannung"},
+      "ble_rssi": {"name": "BLE-Signalstärke"},
+      "device_version": {"name": "Geräteversion"},
+      "venus_soc": {"name": "Ladezustand"},
+      "venus_ble_rssi": {"name": "BLE-Signalstärke"}
+    }
+  }
+}
