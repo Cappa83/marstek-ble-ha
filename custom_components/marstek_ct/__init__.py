@@ -37,15 +37,28 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 class MarstekRuntimeData:
     """Runtime objects for one config entry."""
 
-    ct_coordinator: MarstekCtCoordinator
-    ct_api: MarstekCtBleApi
+    ct_coordinator: MarstekCtCoordinator | None
+    ct_api: MarstekCtBleApi | None
+    ct_mac: str | None
     venus_coordinator: MarstekVenusCoordinator | None
     venus_devices: tuple[VenusDevice, ...]
 
 
+def _configured_ct_mac(entry: ConfigEntry) -> str | None:
+    """Return the configured CT002 MAC, supporting pre-v4 entries."""
+    if CONF_CT_MAC in entry.options:
+        raw = entry.options.get(CONF_CT_MAC)
+    else:
+        raw = entry.data.get(CONF_CT_MAC)
+
+    if raw is None or not str(raw).strip():
+        return None
+    return normalize_mac(str(raw))
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Marstek BLE from a config entry without blocking HA startup."""
-    ct_mac = normalize_mac(entry.data[CONF_CT_MAC])
+    ct_mac = _configured_ct_mac(entry)
     ct_poll_interval = int(
         entry.options.get(CONF_CT_POLL_INTERVAL, DEFAULT_CT_POLL_INTERVAL)
     )
@@ -59,16 +72,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     )
 
-    if ct_poll_interval < RECOMMENDED_MIN_CT_POLL_INTERVAL:
-        _LOGGER.warning(
-            "CT002 polling interval is %ss; values below the recommended %ss may "
-            "increase BLE/device load and can destabilize some CT002 units",
-            ct_poll_interval,
-            RECOMMENDED_MIN_CT_POLL_INTERVAL,
-        )
+    if ct_mac is None and not venus_devices:
+        _LOGGER.error("Marstek BLE entry has neither a CT002 nor a Venus device")
+        return False
 
-    ct_api = MarstekCtBleApi(hass, ct_mac)
-    ct_coordinator = MarstekCtCoordinator(hass, entry, ct_api, ct_poll_interval)
+    ct_api: MarstekCtBleApi | None = None
+    ct_coordinator: MarstekCtCoordinator | None = None
+    if ct_mac is not None:
+        if ct_poll_interval < RECOMMENDED_MIN_CT_POLL_INTERVAL:
+            _LOGGER.warning(
+                "CT002 polling interval is %ss; values below the recommended %ss may "
+                "increase BLE/device load and can destabilize some CT002 units",
+                ct_poll_interval,
+                RECOMMENDED_MIN_CT_POLL_INTERVAL,
+            )
+
+        ct_api = MarstekCtBleApi(hass, ct_mac)
+        ct_coordinator = MarstekCtCoordinator(hass, entry, ct_api, ct_poll_interval)
 
     venus_coordinator: MarstekVenusCoordinator | None = None
     if venus_devices:
@@ -80,17 +100,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = MarstekRuntimeData(
         ct_coordinator=ct_coordinator,
         ct_api=ct_api,
+        ct_mac=ct_mac,
         venus_coordinator=venus_coordinator,
         venus_devices=venus_devices,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    entry.async_create_background_task(
-        hass,
-        ct_coordinator.async_refresh(),
-        f"{DOMAIN}-{entry.entry_id}-initial-ct-refresh",
-    )
+    if ct_coordinator is not None:
+        entry.async_create_background_task(
+            hass,
+            ct_coordinator.async_refresh(),
+            f"{DOMAIN}-{entry.entry_id}-initial-ct-refresh",
+        )
     if venus_coordinator is not None:
         entry.async_create_background_task(
             hass,
@@ -108,7 +130,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not unload_ok:
         return False
 
-    if runtime is not None:
+    if runtime is not None and runtime.ct_api is not None:
         await runtime.ct_api.async_disconnect()
     hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     return True
@@ -132,10 +154,11 @@ def _remove_legacy_ct_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate entries created by older Marstek CT integration versions."""
-    if entry.version > 3:
+    if entry.version > 4:
         return False
 
     data: dict[str, Any] = dict(entry.data)
+    options: dict[str, Any] = dict(entry.options)
 
     if entry.version < 2:
         if CONF_CT_MAC not in data:
@@ -151,13 +174,35 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data.pop("ct_type", None)
         data.pop("device_type", None)
 
-    ct_mac = str(data[CONF_CT_MAC])
-    hass.config_entries.async_update_entry(
-        entry,
-        data=data,
-        title=f"Marstek BLE CT002 {ct_mac[-5:].replace(':', '')}",
-        unique_id=ct_mac.replace(":", "").lower(),
-        version=3,
-    )
+    if entry.version < 4:
+        if CONF_CT_MAC not in options:
+            legacy_ct = data.get(CONF_CT_MAC)
+            options[CONF_CT_MAC] = (
+                normalize_mac(str(legacy_ct)) if legacy_ct else ""
+            )
 
+        has_ct = bool(str(options.get(CONF_CT_MAC, "")).strip())
+        venus_devices = parse_venus_devices(
+            options.get(CONF_VENUS_DEVICES, data.get(CONF_VENUS_DEVICES, ""))
+        )
+        if not has_ct and not venus_devices:
+            return False
+
+    update_kwargs: dict[str, Any] = {
+        "data": data,
+        "options": options,
+        "version": 4,
+    }
+
+    # Keep the historic v1-v3 CT identity untouched for entity/device continuity.
+    if entry.version < 3:
+        ct_mac = str(data[CONF_CT_MAC])
+        update_kwargs.update(
+            {
+                "title": f"Marstek BLE CT002 {ct_mac[-5:].replace(':', '')}",
+                "unique_id": ct_mac.replace(":", "").lower(),
+            }
+        )
+
+    hass.config_entries.async_update_entry(entry, **update_kwargs)
     return True
