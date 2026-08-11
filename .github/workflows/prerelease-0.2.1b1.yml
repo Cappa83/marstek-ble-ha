@@ -1,9 +1,7 @@
 name: Publish 0.2.1b1 prerelease
 
 on:
-  push:
-    branches:
-      - release/0.2.1b1
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -33,10 +31,14 @@ jobs:
           python3 -m pip install --disable-pip-version-check pytest
           pytest -q
 
-      - name: Create GitHub prerelease
+      - name: Create GitHub prerelease if missing
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if gh release view v0.2.1b1 >/dev/null 2>&1; then
+            echo "v0.2.1b1 already exists; nothing to publish."
+            exit 0
+          fi
           gh release create v0.2.1b1 \
             --target "$GITHUB_SHA" \
             --title "Marstek BLE 0.2.1b1" \
