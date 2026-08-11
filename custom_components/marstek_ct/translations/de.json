@@ -4,16 +4,25 @@
     "step": {
       "user": {
         "title": "Marstek BLE",
-        "description": "Lokale, rein lesende BLE-Integration. Der CT002 wird standardmäßig alle 5 Sekunden abgefragt. 1 bis 4 Sekunden sind möglich, können die BLE-/Gerätelast aber deutlich erhöhen. Venus-Geräte sind optional und werden separat mit einem langsameren Intervall abgefragt.",
+        "description": "Home Assistant durchsucht die aktuell bekannten connectable BLE-Geräte, einschließlich Bluetooth-Proxys. CT002 und Venus können aus der Liste gewählt werden; eine MAC-Adresse kann weiterhin manuell eingegeben werden. Der CT002 wird standardmäßig alle 5 Sekunden abgefragt.",
         "data": {
-          "ct_mac": "Bluetooth-MAC-Adresse des CT002",
+          "ct_mac": "CT002",
+          "venus_devices": "Venus-Geräte",
           "ct_poll_interval": "CT002-Abfrageintervall",
-          "venus_poll_interval": "Venus-Abfrageintervall",
-          "venus_devices": "Venus-Geräte (eine Zeile je Gerät: Name=Bluetooth-MAC)"
+          "venus_poll_interval": "Venus-Abfrageintervall"
         },
         "data_description": {
+          "ct_mac": "Erkannte CT002 erscheinen als MST-TPM_… mit Bluetooth-MAC. Falls nötig kann die MAC manuell eingegeben werden.",
+          "venus_devices": "Mehrere erkannte Venus können ausgewählt werden. Anschließend wird jedes Gerät einzeln benannt.",
           "ct_poll_interval": "Standard und Empfehlung: 5 s. Zulässig: 1 bis 300 s.",
-          "venus_devices": "Beispiel: Speicher 1=00:11:22:33:44:55. Der Name ist optional; nur die MAC-Adresse ist ebenfalls zulässig."
+          "venus_poll_interval": "Standard: 150 s. Jeder Zyklus liest alle ausgewählten Venus nacheinander."
+        }
+      },
+      "venus_name": {
+        "title": "Venus benennen ({number}/{total})",
+        "description": "Gerät: {device}\nBluetooth-MAC: {address}",
+        "data": {
+          "venus_name": "Name"
         }
       },
       "confirm_fast_poll": {
@@ -22,7 +31,8 @@
       }
     },
     "error": {
-      "invalid_mac": "Mindestens eine Bluetooth-MAC-Adresse ist ungültig."
+      "invalid_mac": "Mindestens eine Bluetooth-MAC-Adresse ist ungültig.",
+      "empty_name": "Der Name darf nicht leer sein."
     },
     "abort": {
       "already_configured": "Dieser CT002 ist bereits konfiguriert."
@@ -32,15 +42,23 @@
     "step": {
       "init": {
         "title": "Marstek-BLE-Optionen",
-        "description": "Die Polling-Einstellungen werden nach dem Speichern übernommen; die Integration wird automatisch neu geladen. Standard und Empfehlung für den CT002 sind 5 Sekunden. Werte von 1 bis 4 Sekunden sind erlaubt, werden aber vor dem Speichern ausdrücklich bestätigt.",
+        "description": "Home Assistant zeigt erkannte Venus-Geräte aus dem Bluetooth-Manager einschließlich Proxys. Bereits konfigurierte Geräte bleiben auswählbar, auch wenn sie gerade nicht gesehen werden. Nach dem Speichern wird die Integration automatisch neu geladen.",
         "data": {
           "ct_poll_interval": "CT002-Abfrageintervall",
           "venus_poll_interval": "Venus-Abfrageintervall",
-          "venus_devices": "Venus-Geräte (eine Zeile je Gerät: Name=Bluetooth-MAC)"
+          "venus_devices": "Venus-Geräte"
         },
         "data_description": {
           "ct_poll_interval": "Standard und Empfehlung: 5 s. Zulässig: 1 bis 300 s.",
-          "venus_devices": "Venus-Geräte hier hinzufügen, umbenennen oder entfernen."
+          "venus_poll_interval": "Standard: 150 s. Ein Poll liest alle ausgewählten Venus nacheinander.",
+          "venus_devices": "Auswählen, hinzufügen oder entfernen. Danach kann jedes ausgewählte Gerät einzeln benannt werden."
+        }
+      },
+      "venus_name": {
+        "title": "Venus benennen ({number}/{total})",
+        "description": "Gerät: {device}\nBluetooth-MAC: {address}",
+        "data": {
+          "venus_name": "Name"
         }
       },
       "confirm_fast_poll": {
@@ -49,7 +67,8 @@
       }
     },
     "error": {
-      "invalid_mac": "Mindestens eine Venus-Bluetooth-MAC-Adresse ist ungültig."
+      "invalid_mac": "Mindestens eine Venus-Bluetooth-MAC-Adresse ist ungültig.",
+      "empty_name": "Der Name darf nicht leer sein."
     }
   },
   "entity": {
@@ -64,6 +83,18 @@
       "ble_rssi": {"name": "BLE-Signalstärke"},
       "device_version": {"name": "Geräteversion"},
       "venus_soc": {"name": "Ladezustand"},
+      "venus_soh": {"name": "Gesundheitszustand (SOH)"},
+      "venus_battery_voltage": {"name": "Batteriespannung"},
+      "venus_battery_current": {"name": "Batteriestrom"},
+      "venus_battery_temperature": {"name": "Batterietemperatur"},
+      "venus_design_capacity": {"name": "Designkapazität"},
+      "venus_mosfet_temperature": {"name": "MOSFET-Temperatur"},
+      "venus_error_code": {"name": "Fehlercode"},
+      "venus_warning_code": {"name": "Warncode"},
+      "venus_cell_voltage_min": {"name": "Minimale Zellspannung"},
+      "venus_cell_voltage_max": {"name": "Maximale Zellspannung"},
+      "venus_cell_voltage_delta": {"name": "Zellspannungsdifferenz"},
+      "venus_cell_voltage": {"name": "Zelle {cell} Spannung"},
       "venus_ble_rssi": {"name": "BLE-Signalstärke"}
     }
   }
