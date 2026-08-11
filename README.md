@@ -1,99 +1,262 @@
 # Marstek BLE for Home Assistant
 
-Read-only, local Bluetooth integration for Home Assistant.
+Lokale, read-only Bluetooth-Integration für **Marstek CT002** und **Marstek Venus E V3** in Home Assistant.
 
-Current verified support:
+---
 
-- **Marstek CT002**
-  - optional: the integration also works with Venus devices only
-  - total power
-  - phase A/B/C power
-  - phase A/B/C voltage (diagnostic, disabled by default)
-  - BLE RSSI (diagnostic, disabled by default)
-  - raw device version byte (diagnostic, disabled by default)
-- **Marstek Venus E V3**
-  - state of charge (SOC)
-  - state of health (SOH); a raw value of `0` is treated as unavailable because Venus E V3 units have been observed reporting `0` on otherwise healthy/new batteries
-  - battery voltage and signed battery current
-  - battery temperature
-  - minimum, maximum and delta cell voltage
-  - design capacity (diagnostic, disabled by default)
-  - MOSFET temperature (diagnostic, disabled by default)
-  - BMS error and warning codes (diagnostic, disabled by default)
-  - 16 individual cell voltages (diagnostic, disabled by default)
-  - BLE RSSI (diagnostic, disabled by default)
+## Deutsch
 
-All Venus BMS values above come from the same read-only `0x14` response that is already used for SOC. Enabling the additional sensors does **not** add BLE requests or increase the Venus polling frequency.
+### Warum Marstek BLE?
 
-The integration uses Home Assistant's native Bluetooth stack, so compatible Home Assistant Bluetooth proxies can be used transparently.
+Die Integration liest CT002 und Venus E V3 **direkt per Bluetooth** über den nativen Bluetooth-Stack von Home Assistant aus. Unterstützte Home-Assistant-Bluetooth-Proxys werden transparent mitgenutzt.
 
-## Important design limits
+Der wesentliche Vorteil gegenüber WLAN-basierten Abfragen ist der deutlich kürzere Datenpfad: Für die hier bereitgestellten Messwerte werden weder WLAN-Verbindung des Marstek-Geräts noch IP-Adresse, DHCP, Router-Erreichbarkeit, Hersteller-Web-API oder Cloud benötigt. Damit entfallen mehrere typische Fehlerquellen von WLAN-/API-Lösungen wie Reconnects, wechselnde IP-Zustände und Netzwerk- oder API-Timeouts.
 
-This integration is **read-only**. It does not control charging, discharging, or the Marstek EMS.
+Bluetooth ist natürlich nicht grundsätzlich störungsfrei. Reichweite und Funkumgebung bleiben relevant. Die Integration ist deshalb bewusst defensiv aufgebaut:
 
-Only protocol fields that were verified against live devices and the community-documented Marstek HM BLE layout are exposed. Unknown bytes are deliberately left uninterpreted until their meaning has been independently verified.
+- **CT002:** persistente BLE-Verbindung, solange sie verfügbar ist
+- **Venus:** kurze, sequenzielle Verbindungen pro Abfrage
+- keine unmittelbaren Retry-Schleifen bei einem fehlgeschlagenen Poll
+- letzte gültige Venus-Werte bleiben bei einzelnen Aussetzern erhalten
+- aggressive CT002-Abfrageintervalle werden nicht empfohlen
+- ausschließlich lesender Zugriff, keine Steuerbefehle an Speicher oder EMS
+
+Ziel ist ein möglichst stabiler, nachvollziehbarer lokaler Datenpfad ohne zusätzliche Netzwerkabhängigkeiten.
+
+### Unterstützte Geräte
+
+#### Marstek CT002
+
+Der CT002 ist **optional**. Die Integration funktioniert auch ausschließlich mit Venus-Geräten.
+
+Bereitgestellte Werte:
+
+- Gesamtleistung
+- Phase A / B / C Leistung
+- Phase A / B / C Spannung
+- BLE-Signalstärke
+- Geräteversion
+
+Spannungen, BLE-RSSI und Geräteversion sind standardmäßig als Diagnose-Entitäten deaktiviert.
+
+#### Marstek Venus E V3
+
+Bereitgestellte Werte:
+
+- Ladezustand (SOC)
+- Gesundheitszustand (SOH)
+- Batteriespannung
+- Batteriestrom
+- Batterietemperatur
+- minimale Zellspannung
+- maximale Zellspannung
+- Zellspannungsdifferenz
+- Designkapazität
+- MOSFET-Temperatur
+- Fehlercode
+- Warncode
+- BLE-Signalstärke
+- Zellspannung 1 bis 16
+
+Alle Venus-BMS-Werte stammen aus derselben read-only BMS-Antwort `0x14`. Das Aktivieren zusätzlicher Sensoren erzeugt **keine zusätzlichen BLE-Abfragen**.
+
+Bei Venus E V3 wurde für SOH auf ansonsten gesunden/neuen Geräten ein Rohwert `0` beobachtet. Dieser Wert wird deshalb als **nicht verfügbar** behandelt. Gültige Werte von `1` bis `100` bleiben unverändert.
+
+### Unterstützte Konfigurationen
+
+Mindestens ein unterstütztes Gerät muss ausgewählt werden. Möglich sind:
+
+- nur CT002
+- eine oder mehrere Venus E V3
+- CT002 zusammen mit einer oder mehreren Venus E V3
+
+Der Config Flow durchsucht die aktuell bekannten connectable BLE-Geräte von Home Assistant einschließlich Bluetooth-Proxys.
+
+Erkannt werden derzeit:
+
+- CT002 mit Namen `MST-TPM_…`
+- Venus E V3 mit Namen `MST_VNSE3_…`
+
+MAC-Adressen können bei Bedarf weiterhin manuell eingetragen werden. Jede Venus kann in der Einrichtung individuell benannt werden.
 
 ### Polling
 
-- CT002 default and recommended interval: **5 seconds**
-- CT002 configurable range: **1 to 300 seconds**
-- intervals below **5 seconds** require explicit confirmation and also generate a warning in the Home Assistant log
-- CT002 polling settings are ignored when no CT002 is configured
-- Venus default: **150 seconds**
-- Venus configurable range: **30 to 3600 seconds**
-- one connection attempt per polling cycle; no immediate retry loop
-- CT002 uses one persistent BLE connection while available
-- Venus devices are queried sequentially and disconnected after each read
-- one Venus poll sends one BMS `0x14` request and updates all Venus BMS sensors from that response
+#### CT002
 
-The CT002 has shown sensitivity to aggressive BLE traffic in real-world use. Faster polling is therefore available for users who want to test it, but individual devices may become less stable below the recommended 5-second interval.
+- Standard: **5 Sekunden**
+- Empfehlung: **5 Sekunden oder langsamer**
+- einstellbar: **1 bis 300 Sekunden**
+- Werte unter 5 Sekunden müssen ausdrücklich bestätigt werden
+- unter 5 Sekunden wird zusätzlich eine Warnung im Home-Assistant-Log erzeugt
+- ohne konfigurierten CT002 werden CT-Polling-Einstellungen ignoriert
 
-## Configuration
+Der CT002 hat sich bei zu aggressivem BLE-Traffic als empfindlich gezeigt. Kürzere Intervalle sind deshalb möglich, aber bewusst nicht die Standardeinstellung.
 
-Add **Marstek BLE** from Home Assistant's integrations UI.
+#### Venus E V3
 
-The config flow requests a fresh Home Assistant Bluetooth scan and offers detected Marstek devices from all registered scanners, including Bluetooth proxies:
+- Standard: **150 Sekunden**
+- einstellbar: **30 bis 3600 Sekunden**
+- mehrere Venus werden nacheinander abgefragt
+- pro Gerät wird eine BMS-Abfrage ausgeführt und die Verbindung anschließend beendet
+- keine sofortige Retry-Schleife bei Fehlern
 
-- CT002 advertisements named `MST-TPM_…`
-- Venus E V3 advertisements named `MST_VNSE3_…`
+### Installation mit HACS
 
-CT002 and Venus devices are independent. A valid configuration contains at least one of them:
+Bis das Repository im Standard-HACS-Verzeichnis gelistet ist, wird es als benutzerdefiniertes Repository hinzugefügt:
+
+- Repository: `Cappa83/marstek-ble-ha`
+- Typ: `Integration`
+
+Danach **Marstek BLE** über HACS installieren und Home Assistant neu starten.
+
+### Bestehende `marstek_ct`-Installationen
+
+Die Domain bleibt absichtlich `marstek_ct`, damit bestehende Home-Assistant-Installationen sauber migriert werden können.
+
+Die Migration erhält vorhandene Identitäten soweit technisch erforderlich, insbesondere für bereits bestehende CT- und Venus-Entitäten. Ältere UDP-spezifische Felder und Entitäten werden nicht weiter verwendet. Der CT002 ist ab Config-Entry-Version 4 nicht mehr zwingend erforderlich.
+
+Der alte UDP-Runtime-Code ist nicht Bestandteil dieses Repositories.
+
+### Versionsmodell
+
+Ab Version **1.0.0** wird das Projekt als stabile Integration versioniert:
+
+- `1.0.1`: kompatibler Bugfix
+- `1.1.0`: kompatible Funktionserweiterung
+- `2.0.0`: inkompatible Änderung
+- `1.1.0b1` / `1.1.0rc1`: Vorabversionen
+
+`main` ist der Entwicklungsbranch. Veröffentlichungen erfolgen ausschließlich als unveränderliche GitHub Releases/Tags. Eine Änderung der Version in `manifest.json` löst nach erfolgreicher Validierung und den Regressionstests automatisch die Veröffentlichung des zugehörigen Releases aus.
+
+---
+
+## English
+
+Local, read-only Bluetooth integration for **Marstek CT002** and **Marstek Venus E V3** in Home Assistant.
+
+### Why Marstek BLE?
+
+The integration reads CT002 and Venus E V3 **directly over Bluetooth** using Home Assistant's native Bluetooth stack. Compatible Home Assistant Bluetooth proxies are supported transparently.
+
+Compared with Wi-Fi based polling, the telemetry path is significantly shorter: the values exposed by this integration do not depend on the Marstek device's Wi-Fi connection, IP address, DHCP state, router reachability, vendor web API, or cloud service. This removes several common failure modes of Wi-Fi/API based solutions, including reconnects, changing network state, and network or API timeouts.
+
+Bluetooth is not inherently immune to interference. Range and RF conditions still matter. The integration therefore uses a deliberately conservative connection strategy:
+
+- **CT002:** persistent BLE connection while available
+- **Venus:** short sequential connections per polling cycle
+- no immediate retry loops after a failed poll
+- last valid Venus values are retained across isolated failures
+- aggressive CT002 polling is discouraged
+- read-only operation, with no control commands sent to storage devices or the EMS
+
+The goal is a stable and transparent local telemetry path with as few additional network dependencies as possible.
+
+### Supported devices
+
+#### Marstek CT002
+
+CT002 is **optional**. The integration can also be used with Venus devices only.
+
+Available values:
+
+- total power
+- phase A / B / C power
+- phase A / B / C voltage
+- BLE signal strength
+- device version
+
+Voltage, BLE RSSI, and device version entities are disabled by default as diagnostic entities.
+
+#### Marstek Venus E V3
+
+Available values:
+
+- state of charge (SOC)
+- state of health (SOH)
+- battery voltage
+- battery current
+- battery temperature
+- minimum cell voltage
+- maximum cell voltage
+- cell voltage delta
+- design capacity
+- MOSFET temperature
+- error code
+- warning code
+- BLE signal strength
+- cell voltage 1 through 16
+
+All Venus BMS values come from the same read-only BMS `0x14` response. Enabling additional sensors does **not** generate additional BLE requests.
+
+A raw SOH value of `0` has been observed on otherwise healthy/new Venus E V3 units. It is therefore treated as **unavailable**. Valid values from `1` through `100` remain unchanged.
+
+### Supported configurations
+
+At least one supported device must be selected. Valid setups are:
 
 - CT002 only
-- one or more Venus devices only
-- CT002 plus one or more Venus devices
+- one or more Venus E V3 devices
+- CT002 plus one or more Venus E V3 devices
 
-Each selected Venus is named individually. Manual Bluetooth MAC entry remains available as a fallback.
+The config flow scans connectable BLE devices currently known to Home Assistant, including Bluetooth proxies.
 
-Polling intervals and both the CT002 and Venus device selection can be changed later under **Configure**. Already configured devices remain selectable even if they are temporarily not visible during a scan. Saving the options reloads the integration automatically.
+Currently detected names:
 
-Internally the existing `Name=Bluetooth-MAC` Venus representation is retained. Existing v3 entries migrate to config-entry version 4 without changing the historic CT entity/device identities.
+- CT002: `MST-TPM_…`
+- Venus E V3: `MST_VNSE3_…`
 
-## Existing `marstek_ct` installations
+Bluetooth MAC addresses can still be entered manually when required. Each selected Venus device can be named individually during setup.
 
-The Home Assistant domain remains `marstek_ct` intentionally. Migration keeps the existing CT total-power entity identity intact, removes obsolete UDP-era entities, preserves legacy identifiers that are still required for entity continuity, and moves the configurable CT002 selection into options so it can be added or removed without making CT002 mandatory.
+### Polling
+
+#### CT002
+
+- default: **5 seconds**
+- recommended: **5 seconds or slower**
+- configurable: **1 to 300 seconds**
+- intervals below 5 seconds require explicit confirmation
+- intervals below 5 seconds also create a Home Assistant log warning
+- CT polling settings are ignored when no CT002 is configured
+
+CT002 units have shown sensitivity to overly aggressive BLE traffic. Faster polling remains available, but it is intentionally not the default.
+
+#### Venus E V3
+
+- default: **150 seconds**
+- configurable: **30 to 3600 seconds**
+- multiple Venus devices are queried sequentially
+- each device receives one BMS request and is disconnected afterwards
+- no immediate retry loop after failures
+
+### Installation with HACS
+
+Until the repository is listed in the default HACS store, add it as a custom repository:
+
+- Repository: `Cappa83/marstek-ble-ha`
+- Type: `Integration`
+
+Then install **Marstek BLE** through HACS and restart Home Assistant.
+
+### Existing `marstek_ct` installations
+
+The domain intentionally remains `marstek_ct` so existing Home Assistant installations can be migrated cleanly.
+
+Migration preserves existing identities where required for entity continuity, including existing CT and Venus entities. Legacy UDP-only configuration fields and entities are no longer used. From config-entry version 4 onward, CT002 is no longer mandatory.
 
 The old UDP runtime code is not part of this repository.
 
-## Installation with HACS
+### Versioning
 
-Until this repository is added to the default HACS store, add it as a custom integration repository and install **Marstek BLE**.
+Starting with **1.0.0**, the project uses stable semantic-style releases:
 
-Repository: `Cappa83/marstek-ble-ha`
+- `1.0.1`: compatible bug fix
+- `1.1.0`: compatible feature addition
+- `2.0.0`: incompatible change
+- `1.1.0b1` / `1.1.0rc1`: pre-release versions
 
-GitHub pre-releases can be installed through HACS when pre-releases are enabled for this repository.
+`main` is the development branch. Distribution is done through immutable GitHub Releases/tags. Changing the version in `manifest.json` automatically triggers validation, regression tests, and publication of the corresponding release when all checks pass.
 
-## Versioning and releases
-
-The project uses semantic-style versions:
-
-- patch release, for example `0.3.1`: compatible bug fix
-- minor release, for example `0.4.0`: compatible feature addition
-- beta/RC, for example `0.3.0b1` or `0.3.0rc1`: test release before the corresponding stable version
-
-`main` is the development branch. HACS distribution is done through immutable GitHub Releases/tags, not through release branches.
-
-Publishing is handled by the **Publish release** GitHub Action. It accepts the version from `manifest.json`, compiles the integration, validates JSON, runs the regression tests, and only then creates `v<version>`. Versions containing `a`, `b`, or `rc` are published as GitHub pre-releases.
+---
 
 ## License
 
