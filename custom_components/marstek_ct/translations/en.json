@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Marstek BLE",
-        "description": "Read-only local BLE integration. CT002 polling defaults to 5 seconds. Venus devices are optional and are polled separately at a slower interval.",
+        "description": "Read-only local BLE integration. CT002 polling defaults to 5 seconds. Intervals from 1 to 4 seconds are allowed but can significantly increase BLE/device load. Venus devices are optional and are polled separately at a slower interval.",
         "data": {
           "ct_mac": "CT002 Bluetooth MAC address",
           "ct_poll_interval": "CT002 polling interval",
@@ -12,8 +12,13 @@
           "venus_devices": "Venus devices (one per line: Name=Bluetooth MAC)"
         },
         "data_description": {
+          "ct_poll_interval": "Default and recommended: 5 s. Allowed: 1 to 300 s.",
           "venus_devices": "Example: Battery 1=00:11:22:33:44:55. A name is optional; a bare MAC address is also accepted."
         }
+      },
+      "confirm_fast_poll": {
+        "title": "Confirm fast CT002 polling",
+        "description": "You selected {seconds} seconds. Below {recommended} seconds, BLE and device load increase significantly and some CT002 units may become unstable. The integration deliberately does not impose a higher minimum. Submit to confirm that you want to use this interval at your own risk."
       }
     },
     "error": {
@@ -27,15 +32,20 @@
     "step": {
       "init": {
         "title": "Marstek BLE options",
-        "description": "Polling settings apply after saving and the integration reloads automatically. CT002 polling cannot be set below 5 seconds to avoid excessive BLE load.",
+        "description": "Polling settings apply after saving and the integration reloads automatically. The CT002 default and recommendation is 5 seconds. Values from 1 to 4 seconds are allowed but require explicit confirmation before saving.",
         "data": {
           "ct_poll_interval": "CT002 polling interval",
           "venus_poll_interval": "Venus polling interval",
           "venus_devices": "Venus devices (one per line: Name=Bluetooth MAC)"
         },
         "data_description": {
+          "ct_poll_interval": "Default and recommended: 5 s. Allowed: 1 to 300 s.",
           "venus_devices": "Add, rename, or remove Venus devices here."
         }
+      },
+      "confirm_fast_poll": {
+        "title": "Confirm fast CT002 polling",
+        "description": "You selected {seconds} seconds. Below {recommended} seconds, BLE and device load increase significantly and some CT002 units may become unstable. The integration deliberately does not impose a higher minimum. Submit to confirm that you want to use this interval at your own risk."
       }
     },
     "error": {
