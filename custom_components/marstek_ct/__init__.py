@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from .ble_api import MarstekCtBleApi
 from .const import (
@@ -18,11 +20,15 @@ from .const import (
     DEFAULT_CT_POLL_INTERVAL,
     DEFAULT_VENUS_POLL_INTERVAL,
     DOMAIN,
+    LEGACY_CT_SENSOR_KEYS,
+    RECOMMENDED_MIN_CT_POLL_INTERVAL,
 )
 from .coordinator import MarstekCtCoordinator, MarstekVenusCoordinator
 from .helpers import normalize_mac, parse_venus_devices
 from .models import VenusDevice
 from .venus_api import MarstekVenusBleApi
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
@@ -52,6 +58,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry.data.get(CONF_VENUS_DEVICES, ""),
         )
     )
+
+    if ct_poll_interval < RECOMMENDED_MIN_CT_POLL_INTERVAL:
+        _LOGGER.warning(
+            "CT002 polling interval is %ss; values below the recommended %ss may "
+            "increase BLE/device load and can destabilize some CT002 units",
+            ct_poll_interval,
+            RECOMMENDED_MIN_CT_POLL_INTERVAL,
+        )
 
     ct_api = MarstekCtBleApi(hass, ct_mac)
     ct_coordinator = MarstekCtCoordinator(hass, entry, ct_api, ct_poll_interval)
@@ -100,23 +114,50 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+def _remove_legacy_ct_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove obsolete UDP-era CT entities while preserving current BLE entities."""
+    registry = er.async_get(hass)
+    legacy_suffixes = tuple(f"_{key}" for key in LEGACY_CT_SENSOR_KEYS)
+
+    for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if registry_entry.platform != DOMAIN:
+            continue
+        if not registry_entry.entity_id.startswith(f"{Platform.SENSOR.value}."):
+            continue
+        if not registry_entry.unique_id.endswith(legacy_suffixes):
+            continue
+        registry.async_remove(registry_entry.entity_id)
+        _LOGGER.info("Removed obsolete Marstek CT entity %s", registry_entry.entity_id)
+
+
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Migrate entries created by the former UDP-based integration."""
-    if entry.version > 2:
+    """Migrate entries created by older Marstek CT integration versions."""
+    if entry.version > 3:
         return False
 
+    data: dict[str, Any] = dict(entry.data)
+
     if entry.version < 2:
-        data: dict[str, Any] = dict(entry.data)
         if CONF_CT_MAC not in data:
             return False
         data[CONF_CT_MAC] = normalize_mac(str(data[CONF_CT_MAC]))
         data.pop("host", None)
 
-        hass.config_entries.async_update_entry(
-            entry,
-            data=data,
-            title=f"Marstek BLE CT002 {data[CONF_CT_MAC][-5:].replace(':', '')}",
-            version=2,
-        )
+    if entry.version < 3:
+        if CONF_CT_MAC not in data:
+            return False
+        data[CONF_CT_MAC] = normalize_mac(str(data[CONF_CT_MAC]))
+        _remove_legacy_ct_entities(hass, entry)
+        data.pop("ct_type", None)
+        data.pop("device_type", None)
+
+    ct_mac = str(data[CONF_CT_MAC])
+    hass.config_entries.async_update_entry(
+        entry,
+        data=data,
+        title=f"Marstek BLE CT002 {ct_mac[-5:].replace(':', '')}",
+        unique_id=ct_mac.replace(":", "").lower(),
+        version=3,
+    )
 
     return True
