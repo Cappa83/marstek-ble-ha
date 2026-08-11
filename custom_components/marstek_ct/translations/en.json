@@ -1,0 +1,60 @@
+{
+  "title": "Marstek BLE",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Marstek BLE",
+        "description": "Read-only local BLE integration. CT002 polling defaults to 5 seconds. Venus devices are optional and are polled separately at a slower interval.",
+        "data": {
+          "ct_mac": "CT002 Bluetooth MAC address",
+          "ct_poll_interval": "CT002 polling interval",
+          "venus_poll_interval": "Venus polling interval",
+          "venus_devices": "Venus devices (one per line: Name=Bluetooth MAC)"
+        },
+        "data_description": {
+          "venus_devices": "Example: Battery 1=00:11:22:33:44:55. A name is optional; a bare MAC address is also accepted."
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "At least one Bluetooth MAC address is invalid."
+    },
+    "abort": {
+      "already_configured": "This CT002 is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Marstek BLE options",
+        "description": "Polling settings apply after saving and the integration reloads automatically. CT002 polling cannot be set below 5 seconds to avoid excessive BLE load.",
+        "data": {
+          "ct_poll_interval": "CT002 polling interval",
+          "venus_poll_interval": "Venus polling interval",
+          "venus_devices": "Venus devices (one per line: Name=Bluetooth MAC)"
+        },
+        "data_description": {
+          "venus_devices": "Add, rename, or remove Venus devices here."
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "At least one Venus Bluetooth MAC address is invalid."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total_power": {"name": "Total power"},
+      "phase_a_power": {"name": "Phase A power"},
+      "phase_b_power": {"name": "Phase B power"},
+      "phase_c_power": {"name": "Phase C power"},
+      "voltage_a": {"name": "Phase A voltage"},
+      "voltage_b": {"name": "Phase B voltage"},
+      "voltage_c": {"name": "Phase C voltage"},
+      "ble_rssi": {"name": "BLE signal strength"},
+      "device_version": {"name": "Device version"},
+      "venus_soc": {"name": "SOC"},
+      "venus_ble_rssi": {"name": "BLE signal strength"}
+    }
+  }
+}
