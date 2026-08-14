@@ -40,8 +40,6 @@ Die Integration ist deshalb defensiv aufgebaut:
 | Venus-Abfragen | sequenziell, eine BMS-Anfrage pro Gerät | implementierungsabhängig |
 | Verhalten bei Einzel-Aussetzern | keine Retry-Schleife, letzte gültige Venus-Werte bleiben erhalten | implementierungsabhängig |
 
-Die Aussage ist bewusst technisch formuliert: Die Integration vermeidet ganze Klassen zusätzlicher Netzwerkfehler. Sie behauptet nicht, dass BLE selbst immun gegen Funkprobleme wäre.
-
 ### Unterstützte Geräte
 
 #### Marstek CT002 / Marstek CT Smart Meter
@@ -128,14 +126,6 @@ Bis das Repository im Standard-HACS-Verzeichnis gelistet ist, wird es als benutz
 
 Danach **Marstek BLE** über HACS installieren und Home Assistant neu starten.
 
-### Bestehende `marstek_ct`-Installationen
-
-Die Domain bleibt absichtlich `marstek_ct`, damit bestehende Home-Assistant-Installationen sauber migriert werden können.
-
-Die Migration erhält vorhandene Identitäten soweit technisch erforderlich, insbesondere für bereits bestehende CT- und Venus-Entitäten. Ältere UDP-spezifische Felder und Entitäten werden nicht weiter verwendet. Der CT002 ist ab Config-Entry-Version 4 nicht mehr zwingend erforderlich.
-
-Der alte UDP-Runtime-Code ist nicht Bestandteil dieses Repositories.
-
 ### Versionsmodell
 
 Ab Version **1.0.0** wird das Projekt als stabile Integration versioniert:
@@ -186,8 +176,6 @@ The integration therefore uses a deliberately conservative connection strategy:
 | CT002 connection | persistent | implementation-dependent |
 | Venus polling | sequential, one BMS request per device | implementation-dependent |
 | Isolated failure handling | no retry loop, last valid Venus values retained | implementation-dependent |
-
-The comparison is intentionally technical: this integration removes entire classes of additional network failure modes. It does not claim that BLE itself is immune to radio interference.
 
 ### Supported devices
 
@@ -274,14 +262,6 @@ Until the repository is listed in the default HACS store, add it as a custom rep
 - Type: `Integration`
 
 Then install **Marstek BLE** through HACS and restart Home Assistant.
-
-### Existing `marstek_ct` installations
-
-The domain intentionally remains `marstek_ct` so existing Home Assistant installations can be migrated cleanly.
-
-Migration preserves existing identities where required for entity continuity, including existing CT and Venus entities. Legacy UDP-only configuration fields and entities are no longer used. From config-entry version 4 onward, CT002 is no longer mandatory.
-
-The old UDP runtime code is not part of this repository.
 
 ### Versioning
 
