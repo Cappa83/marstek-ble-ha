@@ -2,31 +2,54 @@
 
 **Stabile, schnelle und vollständig lokale BLE-Integration für Marstek CT Smart Meter / CT002 und Marstek Venus E V3 in Home Assistant.**
 
-Unterstützt HACS, den nativen Home-Assistant-Bluetooth-Stack und Home-Assistant-Bluetooth-Proxys. Kein Cloud-Zwang, keine Hersteller-Web-API und für die bereitgestellten Messwerte keine WLAN-, IP-, DHCP- oder UDP-Abhängigkeit des Marstek-Geräts.
+Marstek BLE liest die unterstützten Geräte direkt über den nativen Bluetooth-Stack von Home Assistant aus. Home-Assistant-Bluetooth-Proxys werden unterstützt. Für die bereitgestellten Messwerte sind weder WLAN noch IP-Adresse, DHCP, UDP, Hersteller-Web-API oder Cloud-Zugriff des Marstek-Geräts erforderlich.
 
 ---
 
 ## Deutsch
 
-### Warum Marstek BLE?
+### Highlights
 
-Marstek BLE liest **CT002 und Venus E V3 direkt per Bluetooth** über den nativen Bluetooth-Stack von Home Assistant aus. Unterstützte Bluetooth-Proxys werden transparent verwendet.
+- vollständig lokale BLE-Kommunikation
+- **automatische Geräteerkennung über den Home-Assistant Config Flow**
+- Discovery über lokale Bluetooth-Adapter und Home-Assistant-Bluetooth-Proxys
+- CT002 optional: CT-only, Venus-only oder gemischter Betrieb
+- CT002 standardmäßig alle **5 Sekunden**
+- persistente BLE-Verbindung zum CT002
+- sequenzielle, kurze Venus-Abfragen
+- eine einzige Venus-BMS-Abfrage aktualisiert alle unterstützten BMS-Sensoren
+- keine zusätzlichen BLE-Abfragen durch das Aktivieren weiterer Venus-Sensoren
+- read-only: keine Steuerbefehle an Speicher oder EMS
 
-Der Datenpfad ist bewusst kurz und lokal. Für die hier bereitgestellten Messwerte sind weder das WLAN des Marstek-Geräts noch IP-Adresse, DHCP, Router-Erreichbarkeit, UDP-Kommunikation, Hersteller-Web-API oder Cloud erforderlich.
+### Automatische Erkennung / Config Flow
 
-In der produktiven Referenzinstallation hat sich dieser BLE-Datenpfad gegenüber den zuvor getesteten WLAN-/UDP-Implementierungen als **stabiler und schneller** erwiesen. Das ist kein Versprechen, dass Bluetooth in jeder Funkumgebung störungsfrei ist. Reichweite, Störungen und Proxy-Position bleiben relevante physikalische Faktoren.
+Die Einrichtung erfolgt vollständig über den Home-Assistant **Config Flow**.
 
-Die Integration ist deshalb defensiv aufgebaut:
+Beim Öffnen der Integration fordert Marstek BLE einen aktuellen Bluetooth-Scan von Home Assistant an und nutzt dessen zentrale Bluetooth-Discovery. Dadurch werden Geräte nicht nur über einen lokalen Bluetooth-Adapter gefunden, sondern auch über registrierte **Home-Assistant-Bluetooth-Proxys**.
 
-- **CT002:** persistente BLE-Verbindung, solange sie verfügbar ist
-- **Venus:** kurze, sequenzielle Verbindungen pro Abfrage
-- keine unmittelbaren Retry-Schleifen nach einem fehlgeschlagenen Poll
-- letzte gültige Venus-Werte bleiben bei einzelnen Aussetzern erhalten
-- CT002-Polling standardmäßig alle **5 Sekunden**
-- aggressivere CT002-Intervalle müssen ausdrücklich bestätigt werden
-- ausschließlich lesender Zugriff, keine Steuerbefehle an Speicher oder EMS
+Automatisch erkannt werden derzeit:
 
-### BLE gegenüber WLAN / UDP
+- **CT002 / CT Smart Meter:** Gerätenamen `MST-TPM_…`
+- **Venus E V3:** Gerätenamen `MST_VNSE3_…`
+
+Gefundene Geräte können direkt ausgewählt werden. Mehrere Venus-Geräte werden gemeinsam erkannt und anschließend einzeln benannt.
+
+Falls ein Gerät während der Einrichtung nicht sichtbar ist, kann die Bluetooth-MAC-Adresse weiterhin manuell eingetragen werden. Bereits konfigurierte Geräte bleiben in den Optionen erhalten, auch wenn sie bei einem späteren Scan vorübergehend nicht sichtbar sind.
+
+### Warum BLE statt WLAN / UDP?
+
+Der Datenpfad ist kurz und lokal. Für die hier bereitgestellten Messwerte kommuniziert Home Assistant direkt per BLE mit CT002 und Venus E V3.
+
+Dadurch entfallen zusätzliche Abhängigkeiten wie:
+
+- WLAN-Verbindung des Marstek-Geräts
+- DHCP und IP-Adresse
+- Router-Erreichbarkeit
+- UDP-Kommunikation
+- Hersteller-Web-API
+- Cloud-Dienste
+
+Das reduziert die Zahl möglicher Fehlerstellen und ermöglicht insbesondere beim CT002 kurze, regelmäßige Aktualisierungsintervalle. Bluetooth bleibt Funkkommunikation: Reichweite, Störungen und die Position von Bluetooth-Adapter oder Proxy sind weiterhin relevant.
 
 | Eigenschaft | Marstek BLE | WLAN-/UDP-basierter Datenpfad |
 |---|---|---|
@@ -38,7 +61,7 @@ Die Integration ist deshalb defensiv aufgebaut:
 | CT002 Standardintervall | 5 s | implementierungsabhängig |
 | CT002 Verbindung | persistent | implementierungsabhängig |
 | Venus-Abfragen | sequenziell, eine BMS-Anfrage pro Gerät | implementierungsabhängig |
-| Verhalten bei Einzel-Aussetzern | keine Retry-Schleife, letzte gültige Venus-Werte bleiben erhalten | implementierungsabhängig |
+| Verhalten bei Einzel-Aussetzern | keine unmittelbare Retry-Schleife, letzte gültige Venus-Werte bleiben erhalten | implementierungsabhängig |
 
 ### Unterstützte Geräte
 
@@ -87,15 +110,6 @@ Mindestens ein unterstütztes Gerät muss ausgewählt werden. Möglich sind:
 - eine oder mehrere Venus E V3
 - CT002 zusammen mit einer oder mehreren Venus E V3
 
-Der Config Flow durchsucht die aktuell bekannten connectable BLE-Geräte von Home Assistant einschließlich Bluetooth-Proxys.
-
-Erkannt werden derzeit:
-
-- CT002 mit Namen `MST-TPM_…`
-- Venus E V3 mit Namen `MST_VNSE3_…`
-
-MAC-Adressen können bei Bedarf weiterhin manuell eingetragen werden. Jede Venus kann in der Einrichtung individuell benannt werden.
-
 ### Polling
 
 #### CT002
@@ -107,7 +121,7 @@ MAC-Adressen können bei Bedarf weiterhin manuell eingetragen werden. Jede Venus
 - unter 5 Sekunden wird zusätzlich eine Warnung im Home-Assistant-Log erzeugt
 - ohne konfigurierten CT002 werden CT-Polling-Einstellungen ignoriert
 
-Der CT002 hat sich bei zu aggressivem BLE-Traffic als empfindlich gezeigt. Kürzere Intervalle sind deshalb möglich, aber bewusst nicht die Standardeinstellung.
+Kürzere Intervalle erhöhen die BLE-Last und sind deshalb bewusst nicht die Standardeinstellung.
 
 #### Venus E V3
 
@@ -116,6 +130,7 @@ Der CT002 hat sich bei zu aggressivem BLE-Traffic als empfindlich gezeigt. Kürz
 - mehrere Venus werden nacheinander abgefragt
 - pro Gerät wird eine BMS-Abfrage ausgeführt und die Verbindung anschließend beendet
 - keine sofortige Retry-Schleife bei Fehlern
+- letzte gültige Werte bleiben bei einzelnen fehlgeschlagenen Abfragen erhalten
 
 ### Installation mit HACS
 
@@ -124,7 +139,7 @@ Bis das Repository im Standard-HACS-Verzeichnis gelistet ist, wird es als benutz
 - Repository: `Cappa83/marstek-ble-ha`
 - Typ: `Integration`
 
-Danach **Marstek BLE** über HACS installieren und Home Assistant neu starten.
+Danach **Marstek BLE** über HACS installieren, Home Assistant neu starten und die Integration unter **Einstellungen → Geräte & Dienste → Integration hinzufügen** öffnen. Der Config Flow übernimmt anschließend die Bluetooth-Erkennung.
 
 ### Versionsmodell
 
@@ -135,7 +150,7 @@ Ab Version **1.0.0** wird das Projekt als stabile Integration versioniert:
 - `2.0.0`: inkompatible Änderung
 - `1.1.0b1` / `1.1.0rc1`: Vorabversionen
 
-`main` ist der Entwicklungsbranch. Veröffentlichungen erfolgen ausschließlich als unveränderliche GitHub Releases/Tags. Eine Änderung der Version in `manifest.json` löst nach erfolgreicher Validierung und den Regressionstests automatisch die Veröffentlichung des zugehörigen Releases aus.
+`main` ist der Entwicklungsbranch. Veröffentlichungen erfolgen als GitHub Releases/Tags nach Validierung und Regressionstests.
 
 ---
 
@@ -143,27 +158,50 @@ Ab Version **1.0.0** wird das Projekt als stabile Integration versioniert:
 
 **Stable, fast and fully local BLE integration for Marstek CT Smart Meter / CT002 and Marstek Venus E V3 in Home Assistant.**
 
-Supports HACS, Home Assistant's native Bluetooth stack and Home Assistant Bluetooth proxies. No cloud dependency, no vendor web API, and no Wi-Fi, IP, DHCP or UDP dependency on the Marstek device for the exposed telemetry.
+Marstek BLE reads supported devices directly through Home Assistant's native Bluetooth stack. Home Assistant Bluetooth proxies are supported. The exposed telemetry does not require the Marstek device's Wi-Fi connection, IP address, DHCP, UDP, vendor web API or cloud access.
 
-### Why Marstek BLE?
+### Highlights
 
-Marstek BLE reads **CT002 and Venus E V3 directly over Bluetooth** using Home Assistant's native Bluetooth stack. Compatible Bluetooth proxies are supported transparently.
+- fully local BLE communication
+- **automatic device discovery through the Home Assistant Config Flow**
+- discovery through local Bluetooth adapters and Home Assistant Bluetooth proxies
+- optional CT002: CT-only, Venus-only or mixed setups
+- CT002 defaults to **5-second** polling
+- persistent BLE connection to CT002
+- short sequential Venus connections
+- one Venus BMS request updates all supported BMS sensors
+- enabling additional Venus sensors does not create additional BLE requests
+- read-only operation with no control commands sent to storage devices or the EMS
 
-The telemetry path is deliberately short and local. The values exposed by this integration do not depend on the Marstek device's Wi-Fi connection, IP address, DHCP state, router reachability, UDP communication, vendor web API or cloud service.
+### Automatic discovery / Config Flow
 
-In the production reference installation, this BLE data path proved **more stable and faster** than the previously tested Wi-Fi/UDP implementations. This does not mean Bluetooth is immune to RF problems. Range, interference and proxy placement still matter.
+Setup is handled entirely through the Home Assistant **Config Flow**.
 
-The integration therefore uses a deliberately conservative connection strategy:
+When the integration is opened, Marstek BLE requests a fresh Bluetooth scan from Home Assistant and uses Home Assistant's central Bluetooth discovery. Devices can therefore be discovered through both local Bluetooth adapters and registered **Home Assistant Bluetooth proxies**.
 
-- **CT002:** persistent BLE connection while available
-- **Venus:** short sequential connections per polling cycle
-- no immediate retry loops after a failed poll
-- last valid Venus values are retained across isolated failures
-- CT002 polling defaults to **5 seconds**
-- more aggressive CT002 intervals require explicit confirmation
-- read-only operation, with no control commands sent to storage devices or the EMS
+Currently discovered automatically:
 
-### BLE compared with Wi-Fi / UDP
+- **CT002 / CT Smart Meter:** device names `MST-TPM_…`
+- **Venus E V3:** device names `MST_VNSE3_…`
+
+Discovered devices can be selected directly. Multiple Venus devices are discovered together and can then be named individually.
+
+If a device is not visible during setup, its Bluetooth MAC address can still be entered manually. Already configured devices remain available in the options even if they are temporarily not visible during a later scan.
+
+### Why BLE instead of Wi-Fi / UDP?
+
+The telemetry path is short and local. Home Assistant communicates directly with CT002 and Venus E V3 over BLE for the values exposed by this integration.
+
+This removes additional dependencies such as:
+
+- the Marstek device's Wi-Fi connection
+- DHCP and IP addressing
+- router reachability
+- UDP communication
+- vendor web APIs
+- cloud services
+
+This reduces the number of possible failure points and allows short, regular update intervals, especially for CT002. Bluetooth is still radio communication: range, interference, and Bluetooth adapter or proxy placement remain relevant.
 
 | Property | Marstek BLE | Wi-Fi / UDP data path |
 |---|---|---|
@@ -175,7 +213,7 @@ The integration therefore uses a deliberately conservative connection strategy:
 | CT002 default interval | 5 s | implementation-dependent |
 | CT002 connection | persistent | implementation-dependent |
 | Venus polling | sequential, one BMS request per device | implementation-dependent |
-| Isolated failure handling | no retry loop, last valid Venus values retained | implementation-dependent |
+| Isolated failure handling | no immediate retry loop, last valid Venus values retained | implementation-dependent |
 
 ### Supported devices
 
@@ -224,15 +262,6 @@ At least one supported device must be selected. Valid setups are:
 - one or more Venus E V3 devices
 - CT002 plus one or more Venus E V3 devices
 
-The config flow scans connectable BLE devices currently known to Home Assistant, including Bluetooth proxies.
-
-Currently detected names:
-
-- CT002: `MST-TPM_…`
-- Venus E V3: `MST_VNSE3_…`
-
-Bluetooth MAC addresses can still be entered manually when required. Each selected Venus device can be named individually during setup.
-
 ### Polling
 
 #### CT002
@@ -244,7 +273,7 @@ Bluetooth MAC addresses can still be entered manually when required. Each select
 - intervals below 5 seconds also create a Home Assistant log warning
 - CT polling settings are ignored when no CT002 is configured
 
-CT002 units have shown sensitivity to overly aggressive BLE traffic. Faster polling remains available, but it is intentionally not the default.
+Shorter intervals increase BLE traffic and are intentionally not the default.
 
 #### Venus E V3
 
@@ -253,6 +282,7 @@ CT002 units have shown sensitivity to overly aggressive BLE traffic. Faster poll
 - multiple Venus devices are queried sequentially
 - each device receives one BMS request and is disconnected afterwards
 - no immediate retry loop after failures
+- last valid values are retained across isolated failed polls
 
 ### Installation with HACS
 
@@ -261,7 +291,7 @@ Until the repository is listed in the default HACS store, add it as a custom rep
 - Repository: `Cappa83/marstek-ble-ha`
 - Type: `Integration`
 
-Then install **Marstek BLE** through HACS and restart Home Assistant.
+Then install **Marstek BLE** through HACS, restart Home Assistant and open the integration under **Settings → Devices & services → Add integration**. The Config Flow then handles Bluetooth discovery.
 
 ### Versioning
 
@@ -272,7 +302,7 @@ Starting with **1.0.0**, the project uses stable semantic-style releases:
 - `2.0.0`: incompatible change
 - `1.1.0b1` / `1.1.0rc1`: pre-release versions
 
-`main` is the development branch. Distribution is done through immutable GitHub Releases/tags. Changing the version in `manifest.json` automatically triggers validation, regression tests, and publication of the corresponding release when all checks pass.
+`main` is the development branch. Releases are published as GitHub Releases/tags after validation and regression testing.
 
 ---
 
