@@ -20,6 +20,14 @@ jobs:
         with:
           ref: main
 
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+
+      - name: Hassfest validation
+        uses: home-assistant/actions/hassfest@master
+
       - name: Read and verify manifest version
         id: version
         run: |
