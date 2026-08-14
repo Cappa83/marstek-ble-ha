@@ -4,8 +4,6 @@
 
 Unterstützt HACS, den nativen Home-Assistant-Bluetooth-Stack und Home-Assistant-Bluetooth-Proxys. Kein Cloud-Zwang, keine Hersteller-Web-API und für die bereitgestellten Messwerte keine WLAN-, IP-, DHCP- oder UDP-Abhängigkeit des Marstek-Geräts.
 
-> Suchbegriffe: Marstek CT, Marstek CT Smart Meter, Marstek CT002, Marstek Venus E V3, Home Assistant Marstek, HACS, BLE, Bluetooth.
-
 ---
 
 ## Deutsch
