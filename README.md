@@ -1,6 +1,10 @@
 # Marstek BLE for Home Assistant
 
-Lokale, read-only Bluetooth-Integration für **Marstek CT002** und **Marstek Venus E V3** in Home Assistant.
+**Stabile, schnelle und vollständig lokale BLE-Integration für Marstek CT Smart Meter / CT002 und Marstek Venus E V3 in Home Assistant.**
+
+Unterstützt HACS, den nativen Home-Assistant-Bluetooth-Stack und Home-Assistant-Bluetooth-Proxys. Kein Cloud-Zwang, keine Hersteller-Web-API und für die bereitgestellten Messwerte keine WLAN-, IP-, DHCP- oder UDP-Abhängigkeit des Marstek-Geräts.
+
+> Suchbegriffe: Marstek CT, Marstek CT Smart Meter, Marstek CT002, Marstek Venus E V3, Home Assistant Marstek, HACS, BLE, Bluetooth.
 
 ---
 
@@ -8,24 +12,41 @@ Lokale, read-only Bluetooth-Integration für **Marstek CT002** und **Marstek Ven
 
 ### Warum Marstek BLE?
 
-Die Integration liest CT002 und Venus E V3 **direkt per Bluetooth** über den nativen Bluetooth-Stack von Home Assistant aus. Unterstützte Home-Assistant-Bluetooth-Proxys werden transparent mitgenutzt.
+Marstek BLE liest **CT002 und Venus E V3 direkt per Bluetooth** über den nativen Bluetooth-Stack von Home Assistant aus. Unterstützte Bluetooth-Proxys werden transparent verwendet.
 
-Der wesentliche Vorteil gegenüber WLAN-basierten Abfragen ist der deutlich kürzere Datenpfad: Für die hier bereitgestellten Messwerte werden weder WLAN-Verbindung des Marstek-Geräts noch IP-Adresse, DHCP, Router-Erreichbarkeit, Hersteller-Web-API oder Cloud benötigt. Damit entfallen mehrere typische Fehlerquellen von WLAN-/API-Lösungen wie Reconnects, wechselnde IP-Zustände und Netzwerk- oder API-Timeouts.
+Der Datenpfad ist bewusst kurz und lokal. Für die hier bereitgestellten Messwerte sind weder das WLAN des Marstek-Geräts noch IP-Adresse, DHCP, Router-Erreichbarkeit, UDP-Kommunikation, Hersteller-Web-API oder Cloud erforderlich.
 
-Bluetooth ist natürlich nicht grundsätzlich störungsfrei. Reichweite und Funkumgebung bleiben relevant. Die Integration ist deshalb bewusst defensiv aufgebaut:
+In der produktiven Referenzinstallation hat sich dieser BLE-Datenpfad gegenüber den zuvor getesteten WLAN-/UDP-Implementierungen als **stabiler und schneller** erwiesen. Das ist kein Versprechen, dass Bluetooth in jeder Funkumgebung störungsfrei ist. Reichweite, Störungen und Proxy-Position bleiben relevante physikalische Faktoren.
+
+Die Integration ist deshalb defensiv aufgebaut:
 
 - **CT002:** persistente BLE-Verbindung, solange sie verfügbar ist
 - **Venus:** kurze, sequenzielle Verbindungen pro Abfrage
-- keine unmittelbaren Retry-Schleifen bei einem fehlgeschlagenen Poll
+- keine unmittelbaren Retry-Schleifen nach einem fehlgeschlagenen Poll
 - letzte gültige Venus-Werte bleiben bei einzelnen Aussetzern erhalten
-- aggressive CT002-Abfrageintervalle werden nicht empfohlen
+- CT002-Polling standardmäßig alle **5 Sekunden**
+- aggressivere CT002-Intervalle müssen ausdrücklich bestätigt werden
 - ausschließlich lesender Zugriff, keine Steuerbefehle an Speicher oder EMS
 
-Ziel ist ein möglichst stabiler, nachvollziehbarer lokaler Datenpfad ohne zusätzliche Netzwerkabhängigkeiten.
+### BLE gegenüber WLAN / UDP
+
+| Eigenschaft | Marstek BLE | WLAN-/UDP-basierter Datenpfad |
+|---|---|---|
+| Transport | direktes lokales BLE | WLAN + IP/UDP |
+| DHCP / IP-Adresse nötig | nein | typischerweise ja |
+| Router-/WLAN-Erreichbarkeit des Marstek-Geräts nötig | nein | ja |
+| Hersteller-Cloud / Web-API nötig | nein | je nach Implementierung |
+| Home-Assistant-Bluetooth-Proxys | ja | nicht relevant |
+| CT002 Standardintervall | 5 s | implementierungsabhängig |
+| CT002 Verbindung | persistent | implementierungsabhängig |
+| Venus-Abfragen | sequenziell, eine BMS-Anfrage pro Gerät | implementierungsabhängig |
+| Verhalten bei Einzel-Aussetzern | keine Retry-Schleife, letzte gültige Venus-Werte bleiben erhalten | implementierungsabhängig |
+
+Die Aussage ist bewusst technisch formuliert: Die Integration vermeidet ganze Klassen zusätzlicher Netzwerkfehler. Sie behauptet nicht, dass BLE selbst immun gegen Funkprobleme wäre.
 
 ### Unterstützte Geräte
 
-#### Marstek CT002
+#### Marstek CT002 / Marstek CT Smart Meter
 
 Der CT002 ist **optional**. Die Integration funktioniert auch ausschließlich mit Venus-Geräten.
 
@@ -132,28 +153,47 @@ Ab Version **1.0.0** wird das Projekt als stabile Integration versioniert:
 
 ## English
 
-Local, read-only Bluetooth integration for **Marstek CT002** and **Marstek Venus E V3** in Home Assistant.
+**Stable, fast and fully local BLE integration for Marstek CT Smart Meter / CT002 and Marstek Venus E V3 in Home Assistant.**
+
+Supports HACS, Home Assistant's native Bluetooth stack and Home Assistant Bluetooth proxies. No cloud dependency, no vendor web API, and no Wi-Fi, IP, DHCP or UDP dependency on the Marstek device for the exposed telemetry.
 
 ### Why Marstek BLE?
 
-The integration reads CT002 and Venus E V3 **directly over Bluetooth** using Home Assistant's native Bluetooth stack. Compatible Home Assistant Bluetooth proxies are supported transparently.
+Marstek BLE reads **CT002 and Venus E V3 directly over Bluetooth** using Home Assistant's native Bluetooth stack. Compatible Bluetooth proxies are supported transparently.
 
-Compared with Wi-Fi based polling, the telemetry path is significantly shorter: the values exposed by this integration do not depend on the Marstek device's Wi-Fi connection, IP address, DHCP state, router reachability, vendor web API, or cloud service. This removes several common failure modes of Wi-Fi/API based solutions, including reconnects, changing network state, and network or API timeouts.
+The telemetry path is deliberately short and local. The values exposed by this integration do not depend on the Marstek device's Wi-Fi connection, IP address, DHCP state, router reachability, UDP communication, vendor web API or cloud service.
 
-Bluetooth is not inherently immune to interference. Range and RF conditions still matter. The integration therefore uses a deliberately conservative connection strategy:
+In the production reference installation, this BLE data path proved **more stable and faster** than the previously tested Wi-Fi/UDP implementations. This does not mean Bluetooth is immune to RF problems. Range, interference and proxy placement still matter.
+
+The integration therefore uses a deliberately conservative connection strategy:
 
 - **CT002:** persistent BLE connection while available
 - **Venus:** short sequential connections per polling cycle
 - no immediate retry loops after a failed poll
 - last valid Venus values are retained across isolated failures
-- aggressive CT002 polling is discouraged
+- CT002 polling defaults to **5 seconds**
+- more aggressive CT002 intervals require explicit confirmation
 - read-only operation, with no control commands sent to storage devices or the EMS
 
-The goal is a stable and transparent local telemetry path with as few additional network dependencies as possible.
+### BLE compared with Wi-Fi / UDP
+
+| Property | Marstek BLE | Wi-Fi / UDP data path |
+|---|---|---|
+| Transport | direct local BLE | Wi-Fi + IP/UDP |
+| DHCP / IP address required | no | typically yes |
+| Marstek device router/Wi-Fi reachability required | no | yes |
+| Vendor cloud / web API required | no | implementation-dependent |
+| Home Assistant Bluetooth proxies | yes | not applicable |
+| CT002 default interval | 5 s | implementation-dependent |
+| CT002 connection | persistent | implementation-dependent |
+| Venus polling | sequential, one BMS request per device | implementation-dependent |
+| Isolated failure handling | no retry loop, last valid Venus values retained | implementation-dependent |
+
+The comparison is intentionally technical: this integration removes entire classes of additional network failure modes. It does not claim that BLE itself is immune to radio interference.
 
 ### Supported devices
 
-#### Marstek CT002
+#### Marstek CT002 / Marstek CT Smart Meter
 
 CT002 is **optional**. The integration can also be used with Venus devices only.
 
